@@ -57,6 +57,24 @@ void GDCave::make_it(TileMap* pTileMap, int layer, int seed) {
 
 	RNG::RandSimple simple(seed);
 	// Make the border
+	// - Top/Bottom
+	for (int cy=0; cy < mBorderHeight; ++cy) {
+		for (int cx=0; cx < mBorderWidth*2+mCaveWidth; ++cx) {
+			Vector2i coordsTop(cx, cy);
+			Vector2i coordsBtm(cx, cy+mCaveHeight+mBorderHeight);
+			pTileMap->set_cell(layer,coordsTop,0,mWall,0);
+			pTileMap->set_cell(layer,coordsBtm,0,mWall,0);
+		}
+	}
+	// - Left/Right
+	for (int cx=0; cx < mBorderWidth; ++cx) {
+		for (int cy=0; cy < mBorderHeight*2+mCaveHeight; ++cy) {
+			Vector2i coordsLft(cx, cy);
+			Vector2i coordsRgt(cx+mCaveWidth+mBorderWidth, cy);
+			pTileMap->set_cell(layer,coordsLft,0,mWall,0);
+			pTileMap->set_cell(layer,coordsRgt,0,mWall,0);
+		}
+	}
 	for (int cy=0; cy < mBorderHeight; ++cy) {
 		for (int cx=0; cx < mBorderWidth; ++cx) {
 			Vector2i coordsTop(cx, cy);
