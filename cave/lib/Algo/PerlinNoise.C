@@ -2,8 +2,17 @@
 
 #include "PerlinNoise.h"
 #include "MathUtils.h"
-
+#include "noise1234.h"
 namespace Algo {
+
+double noise2(double x, double y) {
+	return ::snoise2(static_cast<float>(x), static_cast<float>(y));
+}
+double noise3(double x, double y, double z) {
+	return ::noise3(static_cast<float>(x), static_cast<float>(y), static_cast<float>(z));
+}
+
+#ifdef BLAH
 
 namespace {
 
@@ -185,6 +194,8 @@ double noise3(double x, double y, double z)
             );
 }
 
+
+#endif
 
 } // namespace
 

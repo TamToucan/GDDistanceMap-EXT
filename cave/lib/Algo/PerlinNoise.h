@@ -8,8 +8,6 @@ namespace Algo {
 double noise2(double x, double y);
 double noise3(double x, double y, double z);
 
-
-
 inline
 double getNoise2(double x,double y,int octaves)
 {
