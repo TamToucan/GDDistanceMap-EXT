@@ -8,6 +8,8 @@
 #include "RandSimple.h"
 #include "DJSets.h"
 #include "PerlinNoise.h"
+#include "SimplexNoise.h"
+#include "noise1234.h"
 
 using namespace godot;
 
@@ -19,6 +21,8 @@ void GDCave::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_floor", "floorTileCoords"), &GDCave::setFloor);
 	ClassDB::bind_method(D_METHOD("set_wall", "wallTileCoords"), &GDCave::setWall);
 	ClassDB::bind_method(D_METHOD("set_octaves", "octaves"), &GDCave::setOctaves);
+	ClassDB::bind_method(D_METHOD("set_freq", "freq"), &GDCave::setFreq);
+	ClassDB::bind_method(D_METHOD("set_amp", "amp"), &GDCave::setAmp);
 	ClassDB::bind_method(D_METHOD("make_cave", "pTileMap", "layer", "seed"), &GDCave::make_it);
 }
 
@@ -73,6 +77,16 @@ GDCave* GDCave::setOctaves(int octaves) {
 	return this;
 }
 
+GDCave* GDCave::setFreq(int freq) {
+	mFreq = freq;
+	return this;
+}
+
+GDCave* GDCave::setAmp(int amp) {
+	mAmp = amp;
+	return this;
+}
+
 void GDCave::make_it(TileMap* pTileMap, int layer, int seed) {
 
 	RNG::RandSimple simple(seed);
@@ -97,8 +111,8 @@ void GDCave::make_it(TileMap* pTileMap, int layer, int seed) {
 	}
 
 	// Fill with random
-	double W = mCaveWidth;
-	double H = mCaveHeight;
+	double W = mCaveWidth-1 +mAmp;
+	double H = mCaveHeight-1 +mAmp;
 	//std::stringstream ss;
     // ss << "CAVE with octaves: " << mOctaves;
     // ERR_PRINT(ss.str().c_str());
@@ -106,7 +120,15 @@ void GDCave::make_it(TileMap* pTileMap, int layer, int seed) {
 	for (int cy=0; cy < mCaveHeight; ++cy) {
 		for (int cx=0; cx < mCaveWidth; ++cx) {
 			Vector2i coords(mBorderWidth+cx*mCellWidth, mBorderHeight+cy*mCellHeight);
-			Vector2i tile = (Algo::getNoise2(cx/W, cy/H, mOctaves) < 0.0) ? mWall : mFloor;
+			double x = cx/W *mFreq;
+			double y = cy/H *mFreq;
+			double n1 = Algo::getSNoise2(x,y,mOctaves);
+			std::stringstream ss;
+			ss << cx << "," << cy << " (" << x << "," << y << ") => " << n1;
+			ERR_PRINT(ss.str().c_str());
+			Vector2i tile = n1 < 0.0 ? mWall : mFloor;
+			//Vector2i tile = (Algo::getNoise2(cx, cy, mOctaves) < 0.0) ? mWall : mFloor;
+			//Vector2i tile = (Algo::getNoise2(cx, cy, mOctaves) < 0.0) ? mWall : mFloor;
 			//Vector2i tile = (simple.getInt(0,99) < 45) ? mWall : mFloor;
 			setCell(pTileMap, layer,coords,tile);
 		}

@@ -29,6 +29,7 @@
 #include <sstream>
 #include <iostream>
 
+namespace {
 // This is the new and improved, C(2) continuous interpolant
 #define FADE(t) ( t * t * t * ( t * ( t * 6 - 15 ) + 10 ) )
 
@@ -131,6 +132,8 @@ float grad4( int hash, float x, float y, float z, float t ) {
     float v = h<16 ? y : z;
     float w = h<8 ? z : t;
     return ((h&1)? -u : u) + ((h&2)? -v : v) + ((h&4)? -w : w);
+}
+
 }
 
 //---------------------------------------------------------------------
@@ -526,3 +529,42 @@ float pnoise4( float x, float y, float z, float w,
 }
 
 //---------------------------------------------------------------------
+
+/*
+extern "C"
+int wmain(int argc, wchar_t* argv[]) {
+    int num = 200;
+    int amp = 10;
+	float freq = 10;
+    float W = num-1 +amp;
+    float H = num-1 +amp;
+	if (argc > 1) {
+		std::wstring ws(argv[1]);
+		std::string s(ws.begin(), ws.end());
+		num = std::stoi(s);
+	}
+	if (argc > 2) {
+		std::wstring ws(argv[2]);
+		std::string s(ws.begin(), ws.end());
+		freq = std::stof(s);
+	}
+
+	for (int i=0; i < num; ++i) {
+		float y = i/H * freq;
+		for (int j=0; j < num; ++j) {
+			float x = j/W * freq;
+			std::cerr << x << " " << y << std::endl;
+			float z = y * num + x;
+			//float n = noise1(z);
+			float n = noise2(x,y);
+			//float n = pnoise2d(x,y, 1, 1, 1);
+			n = n < 0 ? 1 : -1;
+			if (n >= 0) {
+			std::cout << x << " " << y << " " << n << std::endl;
+			}
+			//std::cout << z << " " << n << std::endl;
+		}
+	}
+	return 0;
+}
+*/

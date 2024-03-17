@@ -22,6 +22,8 @@ protected:
 	int mStartCellY = 0;
 
 	int mOctaves = 8;
+	float mFreq = 1;
+	float mAmp = 1;
 
 	godot::Vector2i mFloor;
 	godot::Vector2i mWall;
@@ -40,6 +42,8 @@ public:
 	GDCave* setWall(godot::Vector2i wall);
 
 	GDCave* setOctaves(int octaves);
+	GDCave* setFreq(int freq);
+	GDCave* setAmp(int amp);
 
 	void make_it(TileMap* pTileMap, int layer, int seed);
 

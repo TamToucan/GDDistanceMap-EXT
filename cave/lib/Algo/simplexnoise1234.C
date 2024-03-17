@@ -30,6 +30,7 @@
 // We don't really need to include this, but play nice and do it anyway.
 #include	"simplexnoise1234.h"
 
+namespace {
 #define FASTFLOOR(x) ( ((int)(x)<=(x)) ? ((int)x) : (((int)x)-1) )
 
 //---------------------------------------------------------------------
@@ -136,6 +137,8 @@ float  grad4( int hash, float x, float y, float z, float t ) {
     {0,0,0,0},{0,0,0,0},{0,0,0,0},{0,0,0,0},{0,0,0,0},{0,0,0,0},{0,0,0,0},{0,0,0,0},
     {2,0,1,3},{0,0,0,0},{0,0,0,0},{0,0,0,0},{3,0,1,2},{3,0,2,1},{0,0,0,0},{3,1,2,0},
     {2,1,0,3},{0,0,0,0},{0,0,0,0},{0,0,0,0},{3,1,0,2},{0,0,0,0},{3,2,0,1},{3,2,1,0}};
+
+}
 
 // 1D simplex noise
 float snoise1(float x) {
