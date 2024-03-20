@@ -22,8 +22,10 @@ protected:
 	int mStartCellY = 0;
 
 	int mOctaves = 8;
+	bool mPerlin = false;
 	float mFreq = 1;
 	float mAmp = 1;
+	int mLoops = 0;
 
 	godot::Vector2i mFloor;
 	godot::Vector2i mWall;
@@ -42,8 +44,10 @@ public:
 	GDCave* setWall(godot::Vector2i wall);
 
 	GDCave* setOctaves(int octaves);
-	GDCave* setFreq(int freq);
-	GDCave* setAmp(int amp);
+	GDCave* setPerlin(bool usePerlin);
+	GDCave* setFreq(float freq);
+	GDCave* setAmp(float amp);
+	GDCave* setLoops(int lopps);
 
 	void make_it(TileMap* pTileMap, int layer, int seed);
 

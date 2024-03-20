@@ -21,8 +21,10 @@ void GDCave::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_floor", "floorTileCoords"), &GDCave::setFloor);
 	ClassDB::bind_method(D_METHOD("set_wall", "wallTileCoords"), &GDCave::setWall);
 	ClassDB::bind_method(D_METHOD("set_octaves", "octaves"), &GDCave::setOctaves);
+	ClassDB::bind_method(D_METHOD("set_perlin", "usePerlin"), &GDCave::setPerlin);
 	ClassDB::bind_method(D_METHOD("set_freq", "freq"), &GDCave::setFreq);
 	ClassDB::bind_method(D_METHOD("set_amp", "amp"), &GDCave::setAmp);
+	ClassDB::bind_method(D_METHOD("set_loops", "loops"), &GDCave::setLoops);
 	ClassDB::bind_method(D_METHOD("make_cave", "pTileMap", "layer", "seed"), &GDCave::make_it);
 }
 
@@ -77,23 +79,40 @@ GDCave* GDCave::setOctaves(int octaves) {
 	return this;
 }
 
-GDCave* GDCave::setFreq(int freq) {
+GDCave* GDCave::setPerlin(bool usePerlin) {
+	mPerlin = usePerlin;
+	return this;
+}
+
+GDCave* GDCave::setFreq(float freq) {
 	mFreq = freq;
 	return this;
 }
 
-GDCave* GDCave::setAmp(int amp) {
+GDCave* GDCave::setAmp(float amp) {
 	mAmp = amp;
+	return this;
+}
+
+GDCave* GDCave::setLoops(int loops) {
+	mLoops = loops;
 	return this;
 }
 
 void GDCave::make_it(TileMap* pTileMap, int layer, int seed) {
 
 	RNG::RandSimple simple(seed);
+	// So don't need to worry about -1,-1 adjust from 0,0 pos when counting neighbors
+	if (mCellWidth > mBorderWidth || mCellHeight > mBorderHeight) {
+		std::stringstream ss;
+		ss << "Cell Width&Height must be <= Border Width&Height";
+		ERR_PRINT(ss.str().c_str());
+		return;
+	}
 	// Make the border
 	// - Top/Bottom
 	for (int cy=0; cy < mBorderHeight; ++cy) {
-		for (int cx=0; cx < mBorderWidth*2+(mCaveWidth*mCellWidth); ++cx) {
+		for (int cx=0; cx < 2*mBorderWidth +(mCaveWidth*mCellWidth); ++cx) {
 			Vector2i coordsTop(cx, cy);
 			Vector2i coordsBtm(cx, cy+mCaveHeight*mCellHeight+mBorderHeight);
 			pTileMap->set_cell(layer,coordsTop,0,mWall,0);
@@ -102,7 +121,7 @@ void GDCave::make_it(TileMap* pTileMap, int layer, int seed) {
 	}
 	// - Left/Right
 	for (int cx=0; cx < mBorderWidth; ++cx) {
-		for (int cy=0; cy < mBorderHeight*2+mCaveHeight*mCellHeight; ++cy) {
+		for (int cy=0; cy < 2*mBorderHeight +(mCaveHeight*mCellHeight); ++cy) {
 			Vector2i coordsLft(cx, cy);
 			Vector2i coordsRgt(cx+mCaveWidth*mCellWidth+mBorderWidth, cy);
 			pTileMap->set_cell(layer,coordsLft,0,mWall,0);
@@ -113,33 +132,83 @@ void GDCave::make_it(TileMap* pTileMap, int layer, int seed) {
 	// Fill with random
 	double W = mCaveWidth-1 +mAmp;
 	double H = mCaveHeight-1 +mAmp;
-	//std::stringstream ss;
-    // ss << "CAVE with octaves: " << mOctaves;
-    // ERR_PRINT(ss.str().c_str());
-
+	int wallCount = 0;
+	double (*pf)(double, double, int) = mPerlin ? &Algo::getNoise2 : &Algo::getSNoise2;
 	for (int cy=0; cy < mCaveHeight; ++cy) {
 		for (int cx=0; cx < mCaveWidth; ++cx) {
 			Vector2i coords(mBorderWidth+cx*mCellWidth, mBorderHeight+cy*mCellHeight);
 			double x = cx/W *mFreq;
 			double y = cy/H *mFreq;
-			double n1 = Algo::getSNoise2(x,y,mOctaves);
-			std::stringstream ss;
-			ss << cx << "," << cy << " (" << x << "," << y << ") => " << n1;
-			ERR_PRINT(ss.str().c_str());
-			Vector2i tile = n1 < 0.0 ? mWall : mFloor;
-			//Vector2i tile = (Algo::getNoise2(cx, cy, mOctaves) < 0.0) ? mWall : mFloor;
-			//Vector2i tile = (Algo::getNoise2(cx, cy, mOctaves) < 0.0) ? mWall : mFloor;
-			//Vector2i tile = (simple.getInt(0,99) < 45) ? mWall : mFloor;
-			setCell(pTileMap, layer,coords,tile);
+			double n1 = (*pf)(x,y,mOctaves);
+			if (simple.getFloat() > 0.55) {
+			//XXXif (n1 < 0) {
+				++wallCount;
+				setCell(pTileMap, layer,coords,mWall);
+			}
+			else {
+				setCell(pTileMap, layer,coords,mFloor);
+			}
 		}
 	}
+
+	// Cellular automata
+	std::vector<Vector2i> walls(mCaveHeight*mCaveWidth/2);
+	std::vector<Vector2i> floors(mCaveHeight*mCaveWidth/2);
+	for (int lp=0; lp < mLoops; ++lp) {
+		std::stringstream ss;
+		ss << "LP: " << lp << " WALLS: " << wallCount;
+		ERR_PRINT(ss.str().c_str());
+		for (int cy=0; cy < mCaveHeight; ++cy) {
+			for (int cx=0; cx < mCaveWidth; ++cx) {
+				Vector2i coords(mBorderWidth+cx*mCellWidth, mBorderHeight+cy*mCellHeight);
+				// If this is a floor the count the walls around it
+				int count = pTileMap->get_cell_atlas_coords(layer,coords+Vector2i(-mCellWidth,-mCaveHeight),false) == mWall ? 1 : 0;
+				count += pTileMap->get_cell_atlas_coords(layer,coords+Vector2i(0,-mCaveHeight),false) == mWall ? 1 : 0;
+				count += pTileMap->get_cell_atlas_coords(layer,coords+Vector2i(mCaveWidth,-mCaveHeight),false) == mWall ? 1 : 0;
+
+				count += pTileMap->get_cell_atlas_coords(layer,coords+Vector2i(-mCaveWidth,0),false) == mWall ? 1 : 0;
+				count += pTileMap->get_cell_atlas_coords(layer,coords+Vector2i(mCaveWidth,0),false) == mWall ? 1 : 0;
+
+				count += pTileMap->get_cell_atlas_coords(layer,coords+Vector2i(-mCaveWidth,mCaveHeight),false) == mWall ? 1 : 0;
+				count += pTileMap->get_cell_atlas_coords(layer,coords+Vector2i(0,mCaveHeight),false) == mWall ? 1 : 0;
+				count += pTileMap->get_cell_atlas_coords(layer,coords+Vector2i(mCaveWidth,mCaveHeight),false) == mWall ? 1 : 0;
+				if (pTileMap->get_cell_atlas_coords(layer,coords,false) == mFloor) {
+					if (count >= 5 || count == 0) {
+						//setCell(pTileMap, layer, coords, mWall);
+						walls.push_back(coords);
+						++wallCount;
+					}
+				}
+				else {
+					if (count < 5 && count != 0) {
+						//setCell(pTileMap, layer, coords, mFloor);
+						floors.push_back(coords);
+						--wallCount;
+					}
+				}
+			}
+		}
+		for (Vector2i corner : walls) {
+			setCell(pTileMap, layer, corner, mWall);
+		}
+		for (Vector2i corner : walls) {
+			setCell(pTileMap, layer, corner, mFloor);
+		}
+		walls.clear();
+		floors.clear();
+	}
+	std::stringstream ss;
+	ss << "WALLS: " << wallCount;
+	ERR_PRINT(ss.str().c_str());
 }
 
 ///////////////////////////////////////////////////
+
 void GDCave::setCell(TileMap* pTileMap, int layer, Vector2i coords, Vector2i tile) {
+	Vector2i corner = Vector2i(coords.x, coords.y);
 	for (int y=0; y < mCellHeight; ++y) {
 		for (int x=0; x < mCellWidth; ++x) {
-			Vector2i pos(coords.x + x, coords.y + y);
+			Vector2i pos(corner.x + x, corner.y + y);
 			pTileMap->set_cell(layer,pos,0,tile,0);
 		}
 	}
