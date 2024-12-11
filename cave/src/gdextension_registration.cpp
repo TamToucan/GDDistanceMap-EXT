@@ -9,6 +9,8 @@
 using namespace godot;
 
 void initialize_libgdcave(ModuleInitializationLevel p_level) {
+	std::cout << "################# REGISTER OUT" << std::endl;
+	std::cerr << "################# REGISTER ERR" << std::endl;
 	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
 		return;
 	}

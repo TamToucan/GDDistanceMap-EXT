@@ -4,6 +4,9 @@
 #include <iostream>
 #include "Vector2.h"
 
+//
+// If width/height == 0 then it won't contain or overlap X,Y
+//
 namespace Geom {
 
 template <typename T>
@@ -48,6 +51,20 @@ public:
                 or contains(r.getRightX(), r.getY())
                 or contains(r.getRightX(), r.getTopY())
                 or contains(r.getX(), r.getTopY()) );
+    }
+    void growToContain(const T& x, const T& y) {
+        if (x < m_x) {
+        	m_x = x;
+        }
+        else if (x >= (m_x+m_width)) {
+        	m_width = 1+(x - m_x);
+        }
+        if (y < m_y) {
+        	m_y = y;
+        }
+        else if (y >= (m_y+m_height)) {
+        	m_height = 1+(y - m_y);
+        }
     }
     void centerAt(const MathStuff::Vector2< T >& pnt)
     {
