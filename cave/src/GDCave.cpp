@@ -127,7 +127,7 @@ GDCave* GDCave::setGenerations(const godot::Array& gens) {
     return this;
 }
 
-void GDCave::make_it(TileMap* pTileMap, int layer, int seed)
+void GDCave::make_it(TileMapLayer* pTileMap, int layer, int seed)
 {
 	RNG::RandSimple simple(seed);
 	// So don't need to worry about -1,-1 adjust from 0,0 pos when counting neighbors
@@ -145,8 +145,8 @@ void GDCave::make_it(TileMap* pTileMap, int layer, int seed)
 		for (int cx=0; cx < 2*info.mBorderWidth +(info.mCaveWidth*info.mCellWidth); ++cx) {
 			Vector2i coordsTop(cx, cy);
 			Vector2i coordsBtm(cx, cy+info.mCaveHeight*info.mCellHeight+info.mBorderHeight);
-			pTileMap->set_cell(layer,coordsTop,0,info.mWall,0);
-			pTileMap->set_cell(layer,coordsBtm,0,info.mWall,0);
+			pTileMap->set_cell(coordsTop,0,info.mWall);
+			pTileMap->set_cell(coordsBtm,0,info.mWall);
 		}
 	}
 	// - Left/Right
@@ -154,8 +154,8 @@ void GDCave::make_it(TileMap* pTileMap, int layer, int seed)
 		for (int cy=0; cy < 2*info.mBorderHeight +(info.mCaveHeight*info.mCellHeight); ++cy) {
 			Vector2i coordsLft(cx, cy);
 			Vector2i coordsRgt(cx+info.mCaveWidth*info.mCellWidth+info.mBorderWidth, cy);
-			pTileMap->set_cell(layer,coordsLft,0,info.mWall,0);
-			pTileMap->set_cell(layer,coordsRgt,0,info.mWall,0);
+			pTileMap->set_cell(coordsLft,0,info.mWall);
+			pTileMap->set_cell(coordsRgt,0,info.mWall);
 		}
 	}
 
@@ -191,7 +191,7 @@ void GDCave::make_it(TileMap* pTileMap, int layer, int seed)
 		for (int cy=0; cy < info.mCaveHeight; ++cy) {
 			for (int cx=0; cx < info.mCaveWidth; ++cx) {
 				Vector2i coords = getMapPos(cx,cy);
-				gridIn[cy][cx] = pTileMap->get_cell_atlas_coords(layer,coords,false) == info.mWall
+				gridIn[cy][cx] = pTileMap->get_cell_atlas_coords(coords) == info.mWall
 						? PCG::RogueCave::TILE_WALL
 						: PCG::RogueCave::TILE_FLOOR;
 			}
@@ -272,18 +272,18 @@ void GDCave::make_it(TileMap* pTileMap, int layer, int seed)
 
 // ===========================================================================
 
-bool GDCave::isWall(int cx, int cy, TileMap* pTileMap, int layer) {
+bool GDCave::isWall(int cx, int cy, TileMapLayer* pTileMap, int layer) {
 	if (cx >= 0 && cx < info.mCaveWidth && cy >= 0 && cy < info.mCaveHeight) {
 		Vector2i coords = getMapPos(cx,cy);
-		return (pTileMap->get_cell_atlas_coords(layer,coords, false) == info.mWall);
+		return (pTileMap->get_cell_atlas_coords(coords) == info.mWall);
 	}
 	return false;
 }
 
-bool GDCave::isFloor(int cx, int cy, TileMap* pTileMap, int layer) {
+bool GDCave::isFloor(int cx, int cy, TileMapLayer* pTileMap, int layer) {
 	if (cx >= 0 && cx < info.mCaveWidth && cy >= 0 && cy < info.mCaveHeight) {
 		Vector2i coords = getMapPos(cx,cy);
-		return (pTileMap->get_cell_atlas_coords(layer,coords, false) == info.mFloor);
+		return (pTileMap->get_cell_atlas_coords(coords) == info.mFloor);
 	}
 	return false;
 }
@@ -299,7 +299,7 @@ struct GDCave::BorderWall {
     int thickness;     // Distance through the wall
 };
 
-std::vector<GDCave::BorderWall> GDCave::detectBorderWalls(TileMap* pTileMap, int layer,
+std::vector<GDCave::BorderWall> GDCave::detectBorderWalls(TileMapLayer* pTileMap, int layer,
 		std::pair<Vector2iIntMap, IntVectorOfVector2iMap> floorMaps)
 {
 	std::vector<BorderWall> borderWalls;
@@ -403,7 +403,7 @@ std::vector<GDCave::BorderWall> GDCave::findMST_Kruskal(std::vector<GDCave::Bord
 //
 // Find the adcagent rooms and remove the thinest
 //
-void GDCave::joinRooms(TileMap* pTileMap, int layer, std::pair<Vector2iIntMap, IntVectorOfVector2iMap> floorMaps)
+void GDCave::joinRooms(TileMapLayer* pTileMap, int layer, std::pair<Vector2iIntMap, IntVectorOfVector2iMap> floorMaps)
 {
 	std::vector<GDCave::BorderWall> borderWalls = detectBorderWalls(pTileMap, layer, floorMaps);
 	IntVectorOfVector2iMap roomToFloorsMap = floorMaps.second;
@@ -435,7 +435,7 @@ void GDCave::joinRooms(TileMap* pTileMap, int layer, std::pair<Vector2iIntMap, I
 // and room ID -> floor tiles
 //
 std::pair< GDCave::Vector2iIntMap, GDCave::IntVectorOfVector2iMap >
-GDCave::findRooms(TileMap* pTileMap, int layer)
+GDCave::findRooms(TileMapLayer* pTileMap, int layer)
 {
     Algo::DisjointSets<Vector2i> floors;
     // Directions for 4-connected neighbors: right, down, left, up.
@@ -445,7 +445,7 @@ GDCave::findRooms(TileMap* pTileMap, int layer)
     for (int cx = 0; cx < info.mCaveWidth; ++cx) {
         for (int cy = 0; cy < info.mCaveHeight; ++cy) {
 			Vector2i coords = getMapPos(cx,cy);
-			Vector2i t = pTileMap->get_cell_atlas_coords(layer,coords,false);
+			Vector2i t = pTileMap->get_cell_atlas_coords(coords);
             if (t == info.mFloor) {
             	floors.addElement(Vector2i(cx,cy));
             }
@@ -456,7 +456,7 @@ GDCave::findRooms(TileMap* pTileMap, int layer)
     for (int cx = 0; cx < info.mCaveWidth; ++cx) {
     	for (int cy = 0; cy < info.mCaveHeight; ++cy) {
     		Vector2i coords = getMapPos(cx,cy);
-    		Vector2i t = pTileMap->get_cell_atlas_coords(layer,coords,false);
+    		Vector2i t = pTileMap->get_cell_atlas_coords(coords);
     		if (t == info.mFloor) {
     			for (const Vector2i& dir : directions) {
     				int nx = cx + dir.x;
@@ -464,7 +464,7 @@ GDCave::findRooms(TileMap* pTileMap, int layer)
     				if (   (nx >= 0 && nx < info.mCaveWidth)
     					&& (ny >= 0 && ny < info.mCaveHeight) ) {
     					Vector2i neighbor = getMapPos(nx,ny);
-    					Vector2i dirTile = pTileMap->get_cell_atlas_coords(layer,neighbor,false);
+    					Vector2i dirTile = pTileMap->get_cell_atlas_coords(neighbor);
     					if (dirTile == info.mFloor) {
     						int i1 = floors.findSet(Vector2i(cx,cy));
     						int i2 = floors.findSet(Vector2i(nx,ny));
@@ -484,7 +484,7 @@ GDCave::findRooms(TileMap* pTileMap, int layer)
     for (int cx = 0; cx < info.mCaveWidth; ++cx) {
         for (int cy = 0; cy < info.mCaveHeight; ++cy) {
         	Vector2i coords = getMapPos(cx,cy);
-        	Vector2i t = pTileMap->get_cell_atlas_coords(layer,coords,false);
+        	Vector2i t = pTileMap->get_cell_atlas_coords(coords);
             if (t == info.mFloor) {
                 Vector2i current(cx, cy);
                 int rootId = floors.findSet( current );
@@ -505,7 +505,7 @@ GDCave::findRooms(TileMap* pTileMap, int layer)
 // Count the DIAGs and NSEW and decide if the tile
 // should be changed
 //
-void GDCave::fixup(TileMap* pTileMap, int layer)
+void GDCave::fixup(TileMapLayer* pTileMap, int layer)
 {
 	std::vector<Vector2i> walls;
 	std::vector<Vector2i> floors;
@@ -514,46 +514,40 @@ void GDCave::fixup(TileMap* pTileMap, int layer)
 		for (int cy=0; cy < info.mCaveHeight; ++cy) {
 			for (int cx=0; cx < info.mCaveWidth; ++cx) {
 				Vector2i coords = getMapPos(cx,cy);
-				int count = 0;
 				int DIAG = 0;
 				int NSEW = 0;
 				// NW/N/NE
-				if (pTileMap->get_cell_atlas_coords(layer,coords+Vector2i(-info.mCellWidth,-info.mCellHeight),false) == info.mWall) {
-					++count;
+				if (pTileMap->get_cell_atlas_coords(coords+Vector2i(-info.mCellWidth,-info.mCellHeight)) == info.mWall) {
 					DIAG += 1;
 				}
-				if (pTileMap->get_cell_atlas_coords(layer,coords+Vector2i(0,-info.mCellHeight),false) == info.mWall) {
-					++count;
+				if (pTileMap->get_cell_atlas_coords(coords+Vector2i(0,-info.mCellHeight)) == info.mWall) {
 					NSEW += 1;
 				}
-				if (pTileMap->get_cell_atlas_coords(layer,coords+Vector2i(info.mCellWidth,-info.mCellHeight),false) == info.mWall) {
-					++count;
+				if (pTileMap->get_cell_atlas_coords(coords+Vector2i(info.mCellWidth,-info.mCellHeight)) == info.mWall) {
 					DIAG += 2;
 				}
 
 				// E/W
-				if (pTileMap->get_cell_atlas_coords(layer,coords+Vector2i(info.mCellWidth,0),false) == info.mWall) {
-					++count;
+				if (pTileMap->get_cell_atlas_coords(coords+Vector2i(info.mCellWidth,0)) == info.mWall) {
 					NSEW += 2;
 				}
-				if (pTileMap->get_cell_atlas_coords(layer,coords+Vector2i(-info.mCellWidth,0),false) == info.mWall) {
-					++count;
+				if (pTileMap->get_cell_atlas_coords(coords+Vector2i(-info.mCellWidth,0)) == info.mWall) {
 					NSEW += 8;
 				}
 
 				// SW/S/SE
-				if (pTileMap->get_cell_atlas_coords(layer,coords+Vector2i(-info.mCellWidth,info.mCellHeight),false) == info.mWall) {
-					++count;
+				if (pTileMap->get_cell_atlas_coords(coords+Vector2i(-info.mCellWidth,info.mCellHeight)) == info.mWall) {
 					DIAG += 8;
 				}
-				if (pTileMap->get_cell_atlas_coords(layer,coords+Vector2i(0,info.mCellHeight),false) == info.mWall) {
+				if (pTileMap->get_cell_atlas_coords(coords+Vector2i(0,info.mCellHeight)) == info.mWall) {
 					NSEW += 4;
 				}
-				if (pTileMap->get_cell_atlas_coords(layer,coords+Vector2i(info.mCellWidth,info.mCellHeight),false) == info.mWall) {
-					DIAG == 4;
+				if (pTileMap->get_cell_atlas_coords(coords+Vector2i(info.mCellWidth,info.mCellHeight)) == info.mWall) {
+					DIAG += 4;
 				}
 
-				if (pTileMap->get_cell_atlas_coords(layer,coords,false) == info.mWall) {
+
+				if (pTileMap->get_cell_atlas_coords(coords) == info.mWall) {
 					// NW but not N+W == blank
 					if (((DIAG&0b0001) != 0) && ((NSEW&0b1001) == 0)) {
 						floors.push_back(coords);
@@ -571,7 +565,7 @@ void GDCave::fixup(TileMap* pTileMap, int layer)
 						floors.push_back(coords);
 					}
 				}
-				if (pTileMap->get_cell_atlas_coords(layer,coords,false) == info.mFloor) {
+				if (pTileMap->get_cell_atlas_coords(coords) == info.mFloor) {
 					// NW but not N+W == blank
 					if ((DIAG = 0b1111) && (NSEW == 0b1111)) {
 						walls.push_back(coords);
@@ -595,12 +589,12 @@ void GDCave::fixup(TileMap* pTileMap, int layer)
 
 ///////////////////////////////////////////////////
 
-void GDCave::setCell(TileMap* pTileMap, int layer, Vector2i coords, Vector2i tile) {
+void GDCave::setCell(TileMapLayer* pTileMap, int layer, Vector2i coords, Vector2i tile) {
 	Vector2i corner = Vector2i(coords.x, coords.y);
 	for (int y=0; y < info.mCellHeight; ++y) {
 		for (int x=0; x < info.mCellWidth; ++x) {
 			Vector2i pos(corner.x + x, corner.y + y);
-			pTileMap->set_cell(layer,pos,0,tile,0);
+			pTileMap->set_cell(pos,0,tile);
 		}
 	}
 }

@@ -5,7 +5,7 @@
 #include <vector>
 #include <map>
 #include <godot_cpp/classes/object.hpp>
-#include <godot_cpp/classes/tile_map.hpp>
+#include <godot_cpp/classes/tile_map_layer.hpp>
 #include "DisjointSets.h"
 #include "Rect.h"
 
@@ -43,7 +43,7 @@ public:
 		int mStartCellY = 0;
 		godot::Vector2i mFloor;
 		godot::Vector2i mWall;
-		TileMap* pTileMap;
+		TileMapLayer* pTileMap;
 		int mLayer;
 	};
 
@@ -81,30 +81,30 @@ public:
 	GDCave* setAmp(float amp);
 	GDCave* setGenerations(const godot::Array& gens);
 
-	void make_it(TileMap* pTileMap, int layer, int seed);
+	void make_it(TileMapLayer* pTileMap, int layer, int seed);
 
 private:
 	struct BorderWall;
 
-	void fixup(TileMap* pTileMap, int layer);
+	void fixup(TileMapLayer* pTileMap, int layer);
 
-	std::pair< Vector2iIntMap, IntVectorOfVector2iMap > findRooms(TileMap* pTileMap, int layer);
+	std::pair< Vector2iIntMap, IntVectorOfVector2iMap > findRooms(TileMapLayer* pTileMap, int layer);
 
-	void joinRooms(TileMap* pTileMap, int layer, std::pair<Vector2iIntMap, IntVectorOfVector2iMap> floorMaps);
-	std::vector<BorderWall> detectBorderWalls(TileMap* pTileMap, int layer, std::pair<Vector2iIntMap, IntVectorOfVector2iMap> floorMaps);
+	void joinRooms(TileMapLayer* pTileMap, int layer, std::pair<Vector2iIntMap, IntVectorOfVector2iMap> floorMaps);
+	std::vector<BorderWall> detectBorderWalls(TileMapLayer* pTileMap, int layer, std::pair<Vector2iIntMap, IntVectorOfVector2iMap> floorMaps);
 	std::vector<BorderWall> findMST_Kruskal(std::vector<GDCave::BorderWall>& borderWalls, std::vector<int> roomIds);
 
 private:
-	void setCell(TileMap* pTileMap, int layer, Vector2i coords, Vector2i tile);
+	void setCell(TileMapLayer* pTileMap, int layer, Vector2i coords, Vector2i tile);
 	Vector2i getMapPos(int x, int y) {
 		return Vector2i(info.mBorderWidth+x*info.mCellWidth, info.mBorderHeight+y*info.mCellHeight);
 	}
 	static int getIdForXY(int x, int y) {
 		return y << 16 | x;
 	}
-	bool isWall(int cx, int cy, TileMap* pTileMap, int layer);
+	bool isWall(int cx, int cy, TileMapLayer* pTileMap, int layer);
 	// Can't use !isWall since out of bounds returns false as well
-	bool isFloor(int cx, int cy, TileMap* pTileMap, int layer);
+	bool isFloor(int cx, int cy, TileMapLayer* pTileMap, int layer);
 };
 
 }

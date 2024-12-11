@@ -33,7 +33,7 @@ add_custom_command(
         TARGET ${LIB_NAME}  POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
                 $<TARGET_FILE:${LIB_NAME}>
-			    "C:/Users/tam/Dropbox/godot/lott-alt/addons/gdcave/bin")
+			    "D:/git/the-lott/addons/gdcave/bin")
 			    
 			    
 			    #
