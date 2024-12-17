@@ -129,6 +129,8 @@ GDCave* GDCave::setGenerations(const godot::Array& gens) {
 
 void GDCave::make_it(TileMapLayer* pTileMap, int layer, int seed)
 {
+	info.pTileMap = pTileMap;
+	info.mLayer = layer;
 	RNG::RandSimple simple(seed);
 	// So don't need to worry about -1,-1 adjust from 0,0 pos when counting neighbors
 	if (info.mCellWidth > info.mBorderWidth || info.mCellHeight > info.mBorderHeight) {
@@ -145,8 +147,8 @@ void GDCave::make_it(TileMapLayer* pTileMap, int layer, int seed)
 		for (int cx=0; cx < 2*info.mBorderWidth +(info.mCaveWidth*info.mCellWidth); ++cx) {
 			Vector2i coordsTop(cx, cy);
 			Vector2i coordsBtm(cx, cy+info.mCaveHeight*info.mCellHeight+info.mBorderHeight);
-			pTileMap->set_cell(coordsTop,0,info.mWall);
-			pTileMap->set_cell(coordsBtm,0,info.mWall);
+			info.pTileMap->set_cell(coordsTop,info.mLayer,info.mWall);
+			info.pTileMap->set_cell(coordsBtm,info.mLayer,info.mWall);
 		}
 	}
 	// - Left/Right
@@ -154,8 +156,8 @@ void GDCave::make_it(TileMapLayer* pTileMap, int layer, int seed)
 		for (int cy=0; cy < 2*info.mBorderHeight +(info.mCaveHeight*info.mCellHeight); ++cy) {
 			Vector2i coordsLft(cx, cy);
 			Vector2i coordsRgt(cx+info.mCaveWidth*info.mCellWidth+info.mBorderWidth, cy);
-			pTileMap->set_cell(coordsLft,0,info.mWall);
-			pTileMap->set_cell(coordsRgt,0,info.mWall);
+			info.pTileMap->set_cell(coordsLft,info.mLayer,info.mWall);
+			info.pTileMap->set_cell(coordsRgt,info.mLayer,info.mWall);
 		}
 	}
 
@@ -179,8 +181,6 @@ void GDCave::make_it(TileMapLayer* pTileMap, int layer, int seed)
 			}
 		}
 	}
-
-
 	//
 	// Cellular automata
 	//
@@ -259,8 +259,6 @@ void GDCave::make_it(TileMapLayer* pTileMap, int layer, int seed)
 	//
 	joinRooms(pTileMap, layer, floorMaps);
 
-	info.pTileMap = pTileMap;
-	info.mLayer = layer;
 	Cave::CaveSmoother smoother(info);
 	smoother.smoothEdges();
 
@@ -268,6 +266,7 @@ void GDCave::make_it(TileMapLayer* pTileMap, int layer, int seed)
 	// Remove cells just touching on diagonal etc
 	//
 //	fixup(pTileMap, layer);
+
 }
 
 // ===========================================================================
@@ -594,7 +593,9 @@ void GDCave::setCell(TileMapLayer* pTileMap, int layer, Vector2i coords, Vector2
 	for (int y=0; y < info.mCellHeight; ++y) {
 		for (int x=0; x < info.mCellWidth; ++x) {
 			Vector2i pos(corner.x + x, corner.y + y);
-			pTileMap->set_cell(pos,0,tile);
+			// For some reason Need to use -1,-1 for floor
+			Vector2 t = (tile.x < 0) ? tile : Vector2i(tile.x+x, tile.y+y);
+			pTileMap->set_cell(pos,layer,t);
 		}
 	}
 }
