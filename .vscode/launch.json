@@ -1,0 +1,20 @@
+{
+    "name" : "Gdot EXT",
+    "configurations": [
+        {
+            "name": "EXE LOTT",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "C:\\Users\\tam\\Dropbox\\godot\\lott-alt\\lott-att.exe",
+            "args": [],
+            "miDebuggerArgs": "set directories ",
+            "stopAtEntry": true,
+            "cwd": "${fileDirname}",
+            "environment": [],
+            "console": "externalTerminal",
+            "preAttachCommands": [
+            "set directories D:\\git\\GDCave-EXT\\cave\\src",
+        ],
+        }
+    ]
+}

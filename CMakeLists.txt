@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.19)
-project(gdextension-cave)
+project(gdextension-distaceMap)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -15,4 +15,4 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(GDExtension)
 
-add_subdirectory(cave)
+add_subdirectory(distancemap)
