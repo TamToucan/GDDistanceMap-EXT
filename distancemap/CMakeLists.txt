@@ -19,12 +19,12 @@ add_library(${LIB_NAME} SHARED ${SOURCES})
 target_include_directories(${LIB_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src"
 					                   PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/inc"
 					                   PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/lib/Util"
-					                   PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/lib/Algo"
-					                   PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/lib/PCG"
+					                   PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/lib/Stuff"
 					                   PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/lib")
 
 target_link_libraries(${LIB_NAME} 
 	PRIVATE MathStuff
+	PRIVATE Stuff
 	PUBLIC godot::cpp)
 
 add_custom_command(
@@ -50,6 +50,7 @@ endfunction(BUILD_LIB)
 
 set(LIBDIRS
     lib/Util
+    lib/Stuff
     lib/MathStuff)
     
 include_directories(${LIBDIRS})

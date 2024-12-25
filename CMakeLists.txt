@@ -1,9 +1,13 @@
 cmake_minimum_required(VERSION 3.19)
 project(gdextension-distaceMap)
 
+set(FETCHCONTENT_QUIET OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(FETCHCONTENT_BASE_DIR ${CMAKE_BINARY_DIR}/_deps)
 
 include(FetchContent)
 

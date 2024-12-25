@@ -1,5 +1,5 @@
-#ifndef GD_CAVE_H
-#define GD_CAVE_H
+#ifndef GD_DISTANCe_MAP_H
+#define GD_DISTANCe_MAP_H
 
 #include <utility>
 #include <vector>
@@ -39,14 +39,13 @@ public:
 	~GDDistanceMap();
 
 
+	GDDistanceMap* setCaveSize(godot::Vector2i sz);
+	GDDistanceMap* setCellSize(godot::Vector2i sz);
 	GDDistanceMap* setFloor(godot::Vector2i floor);
-	GDDistanceMap* setWall(godot::Vector2i wall);
 
 	void make_it(TileMapLayer* pTileMap, int layer);
 
 private:
-	bool isWall(int cx, int cy, TileMapLayer* pTileMap, int layer);
-	// Can't use !isWall since out of bounds returns false as well
 	bool isFloor(int cx, int cy, TileMapLayer* pTileMap, int layer);
 	Vector2i getMapPos(int x, int y);
 };
