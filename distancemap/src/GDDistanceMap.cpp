@@ -4,6 +4,7 @@
 #include <limits>
 
 #include "ZSThinning.hpp"
+#include "GridToGraph.hpp"
 #include <godot_cpp/classes/object.hpp>
 #include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/vector2.hpp>
@@ -57,6 +58,23 @@ GDDistanceMap* GDDistanceMap::setFloor(godot::Vector2i floor) {
 	return this;
 }
 
+
+
+
+
+
+int countNeighbors(const std::vector<std::vector<int> >& image, int x, int y)
+{
+	return image[y-1][x-1]
+		+ image[y-1][x]
+		+ image[y-1][x+1]
+		+ image[y][x-1]
+		+ image[y][x+1]
+		+ image[y+1][x-1]
+		+ image[y+1][x]
+		+ image[y+1][x+1];
+}
+
 void GDDistanceMap::make_it(TileMapLayer* pTileMap, int layer)
 {
 	info.pTileMap = pTileMap;
@@ -98,11 +116,38 @@ void GDDistanceMap::make_it(TileMapLayer* pTileMap, int layer)
     	Algo::ZSThinning(image);
     	unsigned char* pPixels = new unsigned char[rows * cols *4];
     	unsigned char* pData = pPixels;
+
     	for (int y=rows-1; y >= 0; --y) {
     		for (int x=0; x < cols; ++x) {
-    			unsigned char c = image[y][x] ? 0xff : 0x00;
-    			for (int i=0; i < 4; ++i) *pData++ = c;
+    			if (image[y][x]) {
+    				int n = countNeighbors(image,x,y);
+    				if (1 == n) {
+    					*pData++ = 0xff;
+    					*pData++ = 0x00;
+    					*pData++ = 0x00;
+    					*pData++ = 0xff;
+    				}
+    				else {
+    					*pData++ = 0xff;
+    					*pData++ = 0xff;
+    					*pData++ = 0xff;
+    					*pData++ = 0xff;
+    				}
+    			} else {
+    				*pData++ = 0x00;
+    				*pData++ = 0x00;
+    				*pData++ = 0x00;
+    				*pData++ = 0x00;
+    			}
     		}
+    	}
+		std::vector<std::pair<int, int>> nodes = GridToGraph::detectNodes(image);
+		for (const auto& node : nodes) {
+			unsigned char* pData = pPixels + 4*(((rows-node.second) * cols) + node.first);
+    		*pData++ = 0xff;
+    		*pData++ = 0xff;
+    		*pData++ = 0x00;
+    		*pData++ = 0xff;
     	}
     	Stuff::TGA::saveToFile("THIN.tga", cols, rows, 32, pPixels);
     	delete[] pPixels;
