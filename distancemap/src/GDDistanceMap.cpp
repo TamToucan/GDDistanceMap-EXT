@@ -1,9 +1,7 @@
 #include <cassert>
 #include <vector>
-#include <queue>
-#include <limits>
 
-#include "ZSThinning.hpp"
+#include "WallDistanceGrid.hpp"
 #include "GridToGraph.hpp"
 #include <godot_cpp/classes/object.hpp>
 #include <godot_cpp/variant/array.hpp>
@@ -15,11 +13,8 @@
 #include <godot_cpp/godot.hpp>
 #include <GDDistanceMap.hpp>
 
-#include "TGA.hpp"
-
 using namespace godot;
 
-std::vector<std::vector<int>> computeDistanceGrid(const std::vector<std::vector<int>>& grid, int& maxDist);
 std::vector<std::vector<std::vector<int>>> computeDirectionalDistances(const std::vector<std::vector<int>>& grid, int& maxDist);
 
 void GDDistanceMap::_bind_methods() {
@@ -97,195 +92,18 @@ void GDDistanceMap::make_it(TileMapLayer* pTileMap, int layer)
     }
 
 
-    int maxDist;
-    std::vector<std::vector<int>> dg = computeDistanceGrid(grid, maxDist);
-    std::cerr << "== DONE GRID " << dg[0].size() << "," << dg.size() << " maxD:" << maxDist << std::endl;
+    std::vector<std::vector<int>> wallDistGrid = DistanceMap::makeWallDistanceGrid(grid);
 
-    const int rows = dg.size();
-    const int cols = dg[0].size();
-    {
-    	std::vector<std::vector<int> > image;
-    	for (std::vector<int>& row : dg) {
-    		std::vector<int> imageRow;
-    		for (int& xy : row) {
-    			imageRow.push_back(xy ? 1 : 0);
-    		}
-    		image.push_back(imageRow);
+    GridToGraph::Grid floorGrid;
+    for (const std::vector<int>& row : wallDistGrid) {
+    	std::vector<int> floorRow;
+    	for (int xy : row) {
+    		floorRow.push_back(xy ? 1 : 0);  // xy != 0 => floor => set
     	}
-    	std::cerr << "== MAKE THIN " << std::endl;
-    	Algo::ZSThinning(image);
-    	unsigned char* pPixels = new unsigned char[rows * cols *4];
-    	unsigned char* pData = pPixels;
-
-    	for (int y=rows-1; y >= 0; --y) {
-    		for (int x=0; x < cols; ++x) {
-    			if (image[y][x]) {
-    				int n = countNeighbors(image,x,y);
-    				if (1 == n) {
-    					*pData++ = 0xff;
-    					*pData++ = 0x00;
-    					*pData++ = 0x00;
-    					*pData++ = 0xff;
-    				}
-    				else {
-    					*pData++ = 0xff;
-    					*pData++ = 0xff;
-    					*pData++ = 0xff;
-    					*pData++ = 0xff;
-    				}
-    			} else {
-    				*pData++ = 0x00;
-    				*pData++ = 0x00;
-    				*pData++ = 0x00;
-    				*pData++ = 0x00;
-    			}
-    		}
-    	}
-		std::vector<std::pair<int, int>> nodes = GridToGraph::detectNodes(image);
-		for (const auto& node : nodes) {
-			unsigned char* pData = pPixels + 4*(((rows-node.second) * cols) + node.first);
-    		*pData++ = 0xff;
-    		*pData++ = 0xff;
-    		*pData++ = 0x00;
-    		*pData++ = 0xff;
-    	}
-    	Stuff::TGA::saveToFile("THIN.tga", cols, rows, 32, pPixels);
-    	delete[] pPixels;
+    	floorGrid.push_back(floorRow);
     }
 
-    {
-    	unsigned char* pPixels = new unsigned char[rows * cols *4];
-    	unsigned char* pData = pPixels;
-    	for (int y=rows-1; y >= 0; --y) {
-    		for (int x=0; x < cols; ++x) {
-    			if (grid[y][x]) {
-    				*pData++ = static_cast<unsigned char>(0x00);
-    				*pData++ = static_cast<unsigned char>(0xff);
-    				*pData++ = static_cast<unsigned char>(0x00);
-    				*pData++ = static_cast<unsigned char>(0xff);
-    			}
-    			else {
-    				*pData++ = static_cast<unsigned char>(0x00);
-    				*pData++ = static_cast<unsigned char>(0x00);
-    				*pData++ = static_cast<unsigned char>(0x00);
-    				*pData++ = static_cast<unsigned char>(0x00);
-    			}
-    		}
-    	}
-    std::cerr << "== MAKE GRID " << std::endl;
-    Stuff::TGA::saveToFile("GRID.tga", cols, rows, 32, pPixels);
-    delete[] pPixels;
-
-    }
-
-    unsigned char* pPixels = new unsigned char[rows * cols *4];
-    unsigned char* pData = pPixels;
-    float md = maxDist;
-    // Reverse y for TGA formatting
-    for (int y=rows-1; y >= 0; --y) {
-    //for (int y=0; y < info.mCaveHeight; ++y) {
-    	for (int x=0; x < cols; ++x) {
-    		std::cerr << "  " << x << "," << y << " d:" << (dg[y][x]) << std::endl;
-    		*pData++ = static_cast<unsigned char>(255 * (dg[y][x]/md));
-    		*pData++ = static_cast<unsigned char>(255 * (dg[y][x]/md));
-    		*pData++ = static_cast<unsigned char>(255 * (dg[y][x]/md));
-    		*pData++ = static_cast<unsigned char>(255 * (dg[y][x]/md));
-    	}
-    }
-    std::cerr << "== MAKE TGA " << std::endl;
-    Stuff::TGA::saveToFile("DMAP.tga", cols, rows, 32, pPixels);
-    delete[] pPixels;
-
-    {
-    const int PixelSize = 4;
-    const int PixelRowSize = cols * PixelSize;
-    int numPixels = rows * PixelRowSize;
-    unsigned char* pPixels = new unsigned char[numPixels];
-    std::memset(pPixels, 0x00, numPixels);
-    float md = maxDist;
-    std::vector< std::pair<int,int>> pnts;
-    // Reverse y for TGA formatting
-    for (int y=rows-2; y > 0; --y) {
-    	for (int x=1; x < cols-1; ++x) {
-    		int v = dg[y][x];
-			if (v >= maxDist) {
-				pnts.push_back({x,y});
-				std::cerr << "== STORE " << x << "," << y << std::endl;
-			}
-    	}
-    }
-    std::vector<std::pair<int,int>> next;
-    while (!pnts.empty())
-    {
-    	for (auto [x, y] : pnts) {
-    		int v = dg[y][x];
-    		std::cerr << "CHK:" << x << "," << y << " " << v << std::endl;
-    		if (v > 0) {
-    			v -= 1;
-    			unsigned char c = static_cast<unsigned char>(255 * (v/md));
-    			std::cerr << "GOT " << x << "," << y << " = " << v << " (" << md << ") => " << static_cast<unsigned int>(c) << std::endl;
-				for (int i=0; i < PixelSize; ++i) {
-					pPixels[y*PixelRowSize + x*PixelSize +i] = 0xff; //c;
-				}
-    			dg[y][x] = -1;
-    			if (dg[y+1][x] >= v) {next.push_back({x, y+1});
-				std::cerr << "== STORE y+1: " << x << "," << y+1 << " nx:" << next.size() << std::endl;
-    			}
-    			if (dg[y-1][x] >= v) {next.push_back({x, y-1});
-				std::cerr << "== STORE y-1: " << x << "," << y-1 << " nx:" << next.size() << std::endl;
-    			}
-    			if (dg[y][x-1] >= v) {next.push_back({x-1, y});
-				std::cerr << "== STORE x-1: " << x-1 << "," << y << " nx:" << next.size() << std::endl;
-    			}
-    			if (dg[y][x+1] >= v) {next.push_back({x+1, y});
-				std::cerr << "== STORE x+1: " << x+1 << "," << y << " nx:" << next.size() << std::endl;
-    			}
-    		}
-    	}
-    	std::cerr << "P:" << pnts.size() << " n:" << next.size();
-    	std::swap(pnts,next);
-    	next.clear();
-		std::cerr << "== SWAPPED p:" << pnts.size() << " next:" << next.size()<< std::endl;
-    }
-    std::cerr << "== MAKE PATH " << std::endl;
-    Stuff::TGA::saveToFile("PATH.tga", dg[0].size()-2, dg.size()-2, 32, pPixels);
-    delete[] pPixels;
-
-    }
-
-
-/*
-    {
-    int max2;
-    std::vector<std::vector<std::vector<int>>> dirGrid = computeDirectionalDistances(grid, max2);
-    unsigned char* pPixels = new unsigned char[info.mCaveHeight * info.mCaveWidth *4];
-    unsigned char* pData = pPixels;
-    float md = maxDist;
-    // Reverse y for TGA formatting
-    for (int y=info.mCaveHeight +info.mBorderHeight*2-1; y >= 0; --y) {
-    //for (int y=0; y < info.mCaveHeight +info.mBorderHeight*2; ++y) {
-    	for (int x=0; x < info.mCaveWidth +info.mBorderWidth*2; ++x) {
-    		int d = -1;
-    		for (int i=0; i < 4; ++i) {
-    			d = std::max(d,dirGrid[y][x][i]);
-    			std::cerr << " " << dirGrid[y][x][i];
-    		}
-    		std::cerr << "|";
-    		unsigned char c = static_cast<unsigned char> (255 * (d / md));
-    		*pData++ = c;
-    		*pData++ = c;
-    		*pData++ = c;
-    		*pData++ = c;
-    	}
-    	std::cerr << std::endl;
-    }
-    std::cerr << "========== MAKE TGA ================" << std::endl;
-    Stuff::TGA::saveToFile("DIRMAP.tga", info.mCaveWidth+info.mBorderHeight*2, info.mCaveHeight+info.mBorderWidth*2, 32, pPixels);
-    delete[] pPixels;
-    std::cerr << "=================================== DONE" << std::endl;
-    }
-    */
-
+    GridToGraph::makeGraph(floorGrid);
 }
 
 // ===========================================================================
@@ -302,80 +120,6 @@ bool GDDistanceMap::isFloor(int cx, int cy, TileMapLayer* pTileMap, int layer) {
 
 Vector2i GDDistanceMap::getMapPos(int x, int y) {
 	return Vector2i(info.mBorderWidth+x*info.mCellWidth, info.mBorderHeight+y*info.mCellHeight);
-}
-
-///////////////////////////////////////////////////
-
-// Function to compute the distance grid
-std::vector<std::vector<int>> computeDistanceGrid(const std::vector<std::vector<int>>& grid, int& maxDist)
-{
-    int rows = grid.size();
-    int cols = grid[0].size();
-    maxDist = 0;
-
-	std::cerr << "GRID ROW, COL " << cols << "x" << rows << std::endl;
-	for (int y=0; y < rows; ++y) {
-		for (int x=0; x < cols; ++x) {
-			std::cerr << " " << grid[y][x];
-		}
-		std::cerr << std::endl;
-	}
-    // Directions for moving (up, down, left, right)
-    std::vector<std::pair<int, int>> directions = {{-1, 0}, {1, 0}, {0, -1}, {0, 1}};
-
-    // Initialize the distance grid with a large value
-    std::vector<std::vector<int>> distanceGrid(rows, std::vector<int>(cols, std::numeric_limits<int>::max()));
-
-    // BFS queue to store cells (row, col)
-    std::queue<std::pair<int, int>> bfsQueue;
-
-    // Add all wall cells to the queue and initialize their distances
-	std::cerr << "==== MAKE GRID " << std::endl;
-    for (int r = 0; r < rows; ++r) {
-        for (int c = 0; c < cols; ++c) {
-            if (grid[r][c] == 1) { // Wall
-                distanceGrid[r][c] = 0;
-                bfsQueue.push({r, c});
-            }
-        }
-    }
-
-    // Perform BFS
-	std::cerr << "==== Q " << bfsQueue.size() << std::endl;
-    while (!bfsQueue.empty()) {
-        auto [current_r, current_c] = bfsQueue.front();
-        bfsQueue.pop();
-        std::cerr << "  Q " << bfsQueue.size() << "  c,r " << current_c << "," << current_r << std::endl;
-
-        // Current cell's distance
-        int current_distance = distanceGrid[current_r][current_c];
-
-        // Process neighbors
-        for (const auto& [dr, dc] : directions) {
-            int neighbor_r = current_r + dr;
-            int neighbor_c = current_c + dc;
-
-        std::cerr << "     moved c,r " << neighbor_c << "," << neighbor_r << " mx:" << maxDist << std::endl;
-
-            // Ensure neighbor is within bounds and update its distance if shorter
-            if (neighbor_r >= 0 && neighbor_r < rows && neighbor_c >= 0 && neighbor_c < cols) {
-                if (distanceGrid[neighbor_r][neighbor_c] > current_distance + 1) {
-                    distanceGrid[neighbor_r][neighbor_c] = current_distance + 1;
-                    maxDist = std::max(maxDist, current_distance + 1);
-                    bfsQueue.push({neighbor_r, neighbor_c});
-                }
-            }
-        }
-    }
-    std::cerr << "==================" << std::endl;
-
-    for (int cy=0; cy < rows; ++cy) {
-    	for (int cx=0; cx < cols; ++cx) {
-    		std::cerr << " " << distanceGrid[cy][cx];
-    	}
-    	std::cerr << std::endl;
-    }
-    return distanceGrid;
 }
 
 /////////////////////////////////////////////////////////
