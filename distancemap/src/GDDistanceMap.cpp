@@ -98,7 +98,7 @@ void GDDistanceMap::make_it(TileMapLayer* pTileMap, int layer)
     for (const std::vector<int>& row : wallDistGrid) {
     	std::vector<int> floorRow;
     	for (int xy : row) {
-    		floorRow.push_back(xy ? 1 : 0);  // xy != 0 => floor => set
+    		floorRow.push_back(xy ? GridToGraph::PATH : GridToGraph::EMPTY);  // xy != 0 => floor => set
     	}
     	floorGrid.push_back(floorRow);
     }
