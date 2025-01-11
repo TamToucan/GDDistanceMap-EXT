@@ -1,8 +1,5 @@
-#include <cassert>
 #include <vector>
 
-#include "WallDistanceGrid.hpp"
-#include "GridToGraph.hpp"
 #include <godot_cpp/classes/object.hpp>
 #include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/vector2.hpp>
@@ -12,16 +9,20 @@
 #include <gdextension_interface.h>
 #include <godot_cpp/godot.hpp>
 #include <GDDistanceMap.hpp>
+#include <unordered_map>
+
+#include "WallDistanceGrid.hpp"
+#include "GridToGraph.hpp"
 
 using namespace godot;
-
-std::vector<std::vector<std::vector<int>>> computeDirectionalDistances(const std::vector<std::vector<int>>& grid, int& maxDist);
 
 void GDDistanceMap::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_floor", "floorTileCoords"), &GDDistanceMap::setFloor);
 	ClassDB::bind_method(D_METHOD("set_cave_size", "caveSize"), &GDDistanceMap::setCaveSize);
 	ClassDB::bind_method(D_METHOD("set_cell_size", "cellSize"), &GDDistanceMap::setCellSize);
 	ClassDB::bind_method(D_METHOD("make_distance_map", "pTileMap", "layer"), &GDDistanceMap::make_it);
+	ClassDB::bind_method(D_METHOD("get_move", "from", "to", "type"), &GDDistanceMap::getMove);
+
 }
 
 GDDistanceMap::GDDistanceMap() {
@@ -53,28 +54,10 @@ GDDistanceMap* GDDistanceMap::setFloor(godot::Vector2i floor) {
 	return this;
 }
 
-
-
-
-
-
-int countNeighbors(const std::vector<std::vector<int> >& image, int x, int y)
-{
-	return image[y-1][x-1]
-		+ image[y-1][x]
-		+ image[y-1][x+1]
-		+ image[y][x-1]
-		+ image[y][x+1]
-		+ image[y+1][x-1]
-		+ image[y+1][x]
-		+ image[y+1][x+1];
-}
-
 void GDDistanceMap::make_it(TileMapLayer* pTileMap, int layer)
 {
 	info.pTileMap = pTileMap;
 	info.mLayer = layer;
-
 
 	std::cerr << "=== COPY TILEMAP " << info.mCaveWidth << "x" << info.mCaveHeight
 			<< " border:" << info.mBorderWidth << "," << info.mBorderHeight
@@ -91,19 +74,34 @@ void GDDistanceMap::make_it(TileMapLayer* pTileMap, int layer)
     	grid.push_back(row);
     }
 
+    //
+    // Make a grid of distance to closest wall (0 = wall)
+    //
+    wallDistGrid = DistanceMap::makeWallDistanceGrid(grid);
 
-    std::vector<std::vector<int>> wallDistGrid = DistanceMap::makeWallDistanceGrid(grid);
+    //
+    // Make a SightGrid which can return the distance to wall (N,S,E,W)
+    //
+    sightGrid = DistanceMap::makeSightGrid(grid);
 
+    //
+    // Create a floor grid where
+    //   WALLS = EMPTY
+    //   FLOOR (i.e. non-zero distance to wall) = PATH
+    //
     GridToGraph::Grid floorGrid;
     for (const std::vector<int>& row : wallDistGrid) {
     	std::vector<int> floorRow;
     	for (int xy : row) {
-    		floorRow.push_back(xy ? GridToGraph::PATH : GridToGraph::EMPTY);  // xy != 0 => floor => set
+    		floorRow.push_back(xy ? GridToGraph::PATH : GridToGraph::EMPTY);
     	}
     	floorGrid.push_back(floorRow);
     }
 
-    GridToGraph::makeGraph(floorGrid);
+    //
+    // Use that floorGrid to create the complete graph for movement
+    //
+    graph = GridToGraph::makeGraph(floorGrid);
 }
 
 // ===========================================================================
@@ -124,76 +122,63 @@ Vector2i GDDistanceMap::getMapPos(int x, int y) {
 
 /////////////////////////////////////////////////////////
 
-// Function to compute directional distances
-std::vector<std::vector<std::vector<int>>> computeDirectionalDistances(const std::vector<std::vector<int>>& grid, int& maxDist) {
-    int rows = grid.size();
-    int cols = grid[0].size();
+float GDDistanceMap::getMove(godot::Vector2 from, godot::Vector2 to, int type)
+{
+	std::cerr << "==GETMOVE: " << from.x << "," << from.x << std::endl;
+	// *8 since base tile is 8x8
+	int fx = from.x / (info.mCellWidth * 8);
+	int fy = from.y / (info.mCellWidth * 8);
+	int tx = to.x / (info.mCellWidth * 8);
+	int ty = to.y / (info.mCellWidth * 8);
+	std::cerr << "  FROM: " << fx << "," << fy << " TO: " << tx << "," << ty << std::endl;
 
+	/// Get Nav info for the from (source) and to (dest)
+	const auto& fromInfo = graph.navGrid[fy][fx];
+	const auto& toInfo = graph.navGrid[ty][tx];
 
-    // Initialize a 3D vector to store distances in 4 directions for each cell
-    // distance[r][c][0] = North
-    // distance[r][c][1] = East
-    // distance[r][c][2] = South
-    // distance[r][c][3] = West
-    std::vector<std::vector<std::vector<int>>> distance(rows, std::vector<std::vector<int>>(cols, std::vector<int>(4, -1)));
+	// Get the nodes at the end of the closest edge to the from/source location
+	const int closeFromFrom = graph.baseEdges[fromInfo.closestBaseEdgeIdx].from;
+	const int closeFromTo = graph.baseEdges[fromInfo.closestBaseEdgeIdx].to;
 
-    maxDist = 0;
+	// Get the nodes at the end of the closest edge to the to/dest location
+	const int closeToFrom = graph.baseEdges[toInfo.closestBaseEdgeIdx].from;
+	const int closeToTo = graph.baseEdges[toInfo.closestBaseEdgeIdx].to;
 
-    // 1. North Sweep
-    for (int c = 0; c < cols; ++c) {
-        for (int r = 0; r < rows; ++r) {
-            if (grid[r][c]) {
-                distance[r][c][0] = 0; // Wall itself
-            } else if (r > 0) {
-                distance[r][c][0] = distance[r - 1][c][0] + 1; // Distance from the cell above
-                maxDist = std::max(distance[r][c][0], maxDist);
-            } else {
-                distance[r][c][0] = -1; // No wall in this direction
-            }
-        }
-    }
+	// Get the Path Cost (length) from the 2 nodes at the source edge to the 2 nodes of dest edge
+	auto find_fftf = graph.pathCostMap.find({closeFromFrom, closeToFrom});
+	auto find_fftt = graph.pathCostMap.find({closeFromFrom, closeToTo});
+	auto find_fttf = graph.pathCostMap.find({closeFromTo, closeToFrom});
+	auto find_fttt = graph.pathCostMap.find({closeFromTo, closeToTo});
 
-    // 2. East Sweep
-    for (int r = 0; r < rows; ++r) {
-        for (int c = cols - 1; c >= 0; --c) {
-            if (grid[r][c]) {
-                distance[r][c][1] = 0; // Wall itself
-            } else if (c < cols - 1) {
-                distance[r][c][1] = distance[r][c + 1][1] + 1; // Distance from the cell to the right
-                maxDist = std::max(distance[r][c][0], maxDist);
-            } else {
-                distance[r][c][1] = -1; // No wall in this direction
-            }
-        }
-    }
+	// Get an initial dir just based on 50/50 moving from source to edgeFrom of edgeTo nodes
+	float dir = (static_cast<int>(from.x)&0x1) ? fromInfo.angleToFromNode : fromInfo.angleToFromNode;
 
-    // 3. South Sweep
-    for (int c = 0; c < cols; ++c) {
-        for (int r = rows - 1; r >= 0; --r) {
-            if (grid[r][c]) {
-                distance[r][c][2] = 0; // Wall itself
-            } else if (r < rows - 1) {
-                distance[r][c][2] = distance[r + 1][c][2] + 1; // Distance from the cell below
-                maxDist = std::max(distance[r][c][0], maxDist);
-            } else {
-                distance[r][c][2] = -1; // No wall in this direction
-            }
-        }
-    }
+	// If for some reason (shouldn't happen)
+	if ( (find_fftf == graph.pathCostMap.end())
+		|| (find_fftt == graph.pathCostMap.end())
+		|| (find_fttf == graph.pathCostMap.end())
+		|| (find_fttt == graph.pathCostMap.end()) ) {
+		std::cerr << "ERROR: Dont have 4 paths from nodes srcFF:" << closeFromFrom << " srcTF" << closeToFrom
+				<< "  dstTF: " << closeToFrom << " dstTT: " << closeToTo << std::endl;
+		return dir;
+	}
+    int minCost = std::numeric_limits<int>::max();
+	if (find_fftf->second < minCost) {
+		minCost = find_fftf->second;
+		dir = fromInfo.angleToFromNode;
+	}
+	if (find_fftt->second < minCost) {
+		minCost = find_fftt->second;
+		dir = fromInfo.angleToFromNode;
+	}
+	if (find_fttf->second < minCost) {
+		minCost = find_fttf->second;
+		dir = fromInfo.angleToToNode;
+	}
+	if (find_fttt->second < minCost) {
+		minCost = find_fttt->second;
+		dir = fromInfo.angleToToNode;
+	}
 
-    // 4. West Sweep
-    for (int r = 0; r < rows; ++r) {
-        for (int c = 0; c < cols; ++c) {
-            if (grid[r][c]) {
-                distance[r][c][3] = 0; // Wall itself
-            } else if (c > 0) {
-                distance[r][c][3] = distance[r][c - 1][3] + 1; // Distance from the cell to the left
-                maxDist = std::max(distance[r][c][0], maxDist);
-            } else {
-                distance[r][c][3] = -1; // No wall in this direction
-            }
-        }
-    }
-
-    return distance;
+	return dir;
 }

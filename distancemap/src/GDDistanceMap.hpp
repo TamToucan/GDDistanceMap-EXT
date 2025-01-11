@@ -1,12 +1,13 @@
-#ifndef GD_DISTANCe_MAP_H
-#define GD_DISTANCe_MAP_H
+#ifndef GD_DISTANCE_MAP_H
+#define GD_DISTANCE_MAP_H
 
 #include <utility>
 #include <vector>
 #include <map>
 #include <godot_cpp/classes/object.hpp>
 #include <godot_cpp/classes/tile_map_layer.hpp>
-#include "Rect.h"
+#include "GridToGraph.hpp"
+#include "WallDistanceGrid.hpp"
 
 namespace godot {
 
@@ -34,6 +35,10 @@ protected:
 
 	Info info;
 
+    GridToGraph::Grid wallDistGrid;
+    DistanceMap::SightGrid sightGrid;
+	GridToGraph::Graph graph;
+
 public:
 	GDDistanceMap();
 	~GDDistanceMap();
@@ -44,6 +49,8 @@ public:
 	GDDistanceMap* setFloor(godot::Vector2i floor);
 
 	void make_it(TileMapLayer* pTileMap, int layer);
+
+	float getMove(godot::Vector2 from, godot::Vector2 to, int type);
 
 private:
 	bool isFloor(int cx, int cy, TileMapLayer* pTileMap, int layer);
