@@ -1,4 +1,10 @@
 #include <vector>
+#include <iostream>
+#include <unordered_map>
+#include <queue>
+#include <cmath>
+#include <limits>
+
 
 #include <godot_cpp/classes/object.hpp>
 #include <godot_cpp/variant/array.hpp>
@@ -9,10 +15,11 @@
 #include <gdextension_interface.h>
 #include <godot_cpp/godot.hpp>
 #include <GDDistanceMap.hpp>
-#include <unordered_map>
 
 #include "WallDistanceGrid.hpp"
 #include "GridToGraph.hpp"
+#include "GridTypes.hpp"
+#include "MathUtils.h"
 
 using namespace godot;
 
@@ -89,7 +96,7 @@ void GDDistanceMap::make_it(TileMapLayer* pTileMap, int layer)
     //   WALLS = EMPTY
     //   FLOOR (i.e. non-zero distance to wall) = PATH
     //
-    GridToGraph::Grid floorGrid;
+    GridType::Grid floorGrid;
     for (const std::vector<int>& row : wallDistGrid) {
     	std::vector<int> floorRow;
     	for (int xy : row) {
@@ -122,63 +129,168 @@ Vector2i GDDistanceMap::getMapPos(int x, int y) {
 
 /////////////////////////////////////////////////////////
 
-float GDDistanceMap::getMove(godot::Vector2 from, godot::Vector2 to, int type)
-{
-	std::cerr << "==GETMOVE: " << from.x << "," << from.x << std::endl;
-	// *8 since base tile is 8x8
-	int fx = from.x / (info.mCellWidth * 8);
-	int fy = from.y / (info.mCellWidth * 8);
-	int tx = to.x / (info.mCellWidth * 8);
-	int ty = to.y / (info.mCellWidth * 8);
-	std::cerr << "  FROM: " << fx << "," << fy << " TO: " << tx << "," << ty << std::endl;
+// Define constants
+const int INVALID_DIRECTION = -1;
+const int MAX_COST = 31;
 
-	/// Get Nav info for the from (source) and to (dest)
-	const auto& fromInfo = graph.navGrid[fy][fx];
-	const auto& toInfo = graph.navGrid[ty][tx];
-
-	// Get the nodes at the end of the closest edge to the from/source location
-	const int closeFromFrom = graph.baseEdges[fromInfo.closestBaseEdgeIdx].from;
-	const int closeFromTo = graph.baseEdges[fromInfo.closestBaseEdgeIdx].to;
-
-	// Get the nodes at the end of the closest edge to the to/dest location
-	const int closeToFrom = graph.baseEdges[toInfo.closestBaseEdgeIdx].from;
-	const int closeToTo = graph.baseEdges[toInfo.closestBaseEdgeIdx].to;
-
-	// Get the Path Cost (length) from the 2 nodes at the source edge to the 2 nodes of dest edge
-	auto find_fftf = graph.pathCostMap.find({closeFromFrom, closeToFrom});
-	auto find_fftt = graph.pathCostMap.find({closeFromFrom, closeToTo});
-	auto find_fttf = graph.pathCostMap.find({closeFromTo, closeToFrom});
-	auto find_fttt = graph.pathCostMap.find({closeFromTo, closeToTo});
-
-	// Get an initial dir just based on 50/50 moving from source to edgeFrom of edgeTo nodes
-	float dir = (static_cast<int>(from.x)&0x1) ? fromInfo.angleToFromNode : fromInfo.angleToFromNode;
-
-	// If for some reason (shouldn't happen)
-	if ( (find_fftf == graph.pathCostMap.end())
-		|| (find_fftt == graph.pathCostMap.end())
-		|| (find_fttf == graph.pathCostMap.end())
-		|| (find_fttt == graph.pathCostMap.end()) ) {
-		std::cerr << "ERROR: Dont have 4 paths from nodes srcFF:" << closeFromFrom << " srcTF" << closeToFrom
-				<< "  dstTF: " << closeToFrom << " dstTT: " << closeToTo << std::endl;
-		return dir;
-	}
-    int minCost = std::numeric_limits<int>::max();
-	if (find_fftf->second < minCost) {
-		minCost = find_fftf->second;
-		dir = fromInfo.angleToFromNode;
-	}
-	if (find_fftt->second < minCost) {
-		minCost = find_fftt->second;
-		dir = fromInfo.angleToFromNode;
-	}
-	if (find_fttf->second < minCost) {
-		minCost = find_fttf->second;
-		dir = fromInfo.angleToToNode;
-	}
-	if (find_fttt->second < minCost) {
-		minCost = find_fttt->second;
-		dir = fromInfo.angleToToNode;
-	}
-
-	return dir;
+// Utility functions
+bool isValidGridPoint(const GridType::Grid& grid, const GridType::Point& point) {
+    return point.first >= 0 && point.second >= 0 &&
+           point.first < grid.size() && point.second < grid[0].size();
 }
+
+int manhattanDistance(const GridType::Point& a, const GridType::Point& b) {
+    return std::abs(a.first - b.first) + std::abs(a.second - b.second);
+}
+
+std::pair<int,int> getDxDy(GridType::Point fromPos, GridType::Point nextPos) {
+	// Compute movement direction
+	GridType::Point direction = {nextPos.first - fromPos.first, nextPos.second - fromPos.second};
+	int dx = (direction.first == 0) ? 0 : (direction.first / std::abs(direction.first));
+	int dy = (direction.second == 0) ? 0 : (direction.second / std::abs(direction.second));
+	return {dx, dy};
+}
+
+
+// Helper function to compute angle
+double computeAngle(GridType::Point from, GridType::Point to) {
+    double dx = to.first - from.first;
+    double dy = to.second - from.second;
+    return std::fmod(std::atan2(dy, dx) * (180.0 / MY_PI) + 360.0, 360.0);
+}
+
+// Function to get the next move as an angle
+double getNextMove(const GridToGraph::Graph& graph, const GridType::Point& source, const GridType::Point& target)
+{
+    const GridToGraph::GridPointInfo& sourceInfo = graph.navGrid[source.second][source.first];
+    const GridToGraph::GridPointInfo& targetInfo = graph.navGrid[target.second][target.first];
+	std::cerr << "]GETNEXTMOVE: " << sourceInfo.closestAbstractEdgeIdx << " " << targetInfo.closestAbstractEdgeIdx << std::endl;
+
+    // **1. Check if already at or adjacent to the target**
+    if (std::abs(source.first - target.first) <= 1 && std::abs(source.second - target.second) <= 1) {
+    	std::cerr << "1]] AT TARGET" << std::endl;
+        return computeAngle(source, target);
+    }
+
+    // **2. Use Flow Field Navigation for moving between abstractNodes
+    if (sourceInfo.closestAbstractNodeIdx != targetInfo.closestAbstractNodeIdx)
+    {
+    	const auto& flowField = graph.flowFields[sourceInfo.closestAbstractEdgeIdx];
+    	auto dirCostOpt = flowField.unpack(source);
+    	if (dirCostOpt) {
+    		int dirIdx = dirCostOpt->first;
+    		GridType::Point nextMove = {
+    				source.first + GridType::directions[dirIdx].first,
+					source.second + GridType::directions[dirIdx].second
+    		};
+    		std::cerr << "FLOW]] USE FLOW dirIdx:" << dirIdx << " cost:" << dirCostOpt->second << std::endl;
+    		return computeAngle(source, nextMove);
+    	}
+    }
+#if 0
+    // **3. Use Base Graph if both are in the same base node**
+    if (sourceInfo.closestBaseNodeIdx == targetInfo.closestBaseNodeIdx)
+    {
+        int sourceBaseNode = sourceInfo.closestBaseNodeIdx;
+        int targetBaseNode = targetInfo.closestBaseNodeIdx;
+        auto it = graph.baseGraph.find(sourceBaseNode);
+        if (it != graph.baseGraph.end() && !it->second.empty()) {
+        	std::cerr << "BASE]] FOUND Source Base:" << sourceBaseNode << " in BaseGraph. Check targetBase:" << targetBaseNode << std::endl;
+        	const auto& neighbors = it->second;
+
+        	int bestNextNode = -1;
+        	int bestCost = std::numeric_limits<int>::max();
+
+        	for (const auto& [neighbor, cost] : neighbors) {
+        		if (neighbor == targetBaseNode) {
+        			bestNextNode = neighbor;
+        			break;
+        		}
+
+        		auto pathCostIt = graph.pathCostMap.find({neighbor, targetBaseNode});
+        		if (pathCostIt != graph.pathCostMap.end() && pathCostIt->second < bestCost) {
+        			bestCost = pathCostIt->second;
+        			bestNextNode = neighbor;
+        		}
+        	}
+
+        	if (bestNextNode != -1) {
+        		std::cerr << "]]]] FOUND Neighbor base: " << bestNextNode << std::endl;
+        		return computeAngle(source, graph.baseNodes[bestNextNode]);
+        	}
+        }
+    }
+
+    // 4. **Use FallbackGrid if flow field is not available**
+    const auto& fallbackCell = graph.fallbackGrid[source.second][source.first];
+    if (fallbackCell.nextFlowX != -1) {
+    	std::cerr << "BAKFLOW]] Use fallback flow: " << fallbackCell.nextFlowX << "," << fallbackCell.nextFlowY << std::endl;
+    	return computeAngle(source, {fallbackCell.nextFlowX, fallbackCell.nextFlowY});
+    }
+
+    // 5. Use graph.infoGrid to move towards the nearest baseEdge
+    GridType::Point bestMove = source;
+    int bestDistance = graph.infoGrid[source.second][source.first];
+    std::cerr << "INFO]] Check infoGrid neighbors" << std::endl;
+    for (const auto& dir : GridType::directions)
+    {
+    	GridType::Point neighbor = {source.first + dir.first, source.second + dir.second};
+    	if (graph.infoGrid[neighbor.second][neighbor.first]&(GridToGraph::EDGE|GridToGraph::XPND)) {
+    		int newDist = (graph.infoGrid[neighbor.second][neighbor.first])&0xffff;
+    		std::cerr << "]]]] Check neighbor: " << neighbor.first << "," << neighbor.second << " cost:" << newDist << std::endl;
+    		if (newDist < bestDistance) {
+    			bestMove = neighbor;
+    			bestDistance = graph.infoGrid[neighbor.second][neighbor.first];
+    		}
+    	}
+    }
+    if (bestMove != source) {
+    	std::cerr << "]]]]] Use bestMove: " << bestMove.first << "," << bestMove.second << std::endl;
+    	return computeAngle(source, bestMove);
+    }
+
+    // **6. Last Resort: Use Navigation Grid**
+    if (sourceInfo.closestAbstractNodeIdx != -1) {
+    	std::cerr << "ANGLE]] Use AngleToFromNode: " << sourceInfo.angleToToNode << std::endl;
+    	return sourceInfo.angleToFromNode; // Approximate movement towards the base node
+    }
+#endif
+
+    // 7. Absolute fallback: move to target
+    std::cerr << "FALLBACK]] FALLBACK src->targ" << std::endl;
+    return computeAngle(source, target);
+}
+
+int directionToDegrees(const GridType::Point p) {
+    static const std::unordered_map<std::pair<int, int>, int, GridType::PairHash> directionMap = {
+        {{1, 0}, 0},   // Right
+        {{1, 1}, 45},  // Up-Right
+        {{0, 1}, 90},  // Up
+        {{-1, 1}, 135}, // Up-Left
+        {{-1, 0}, 180}, // Left
+        {{-1, -1}, 225}, // Down-Left
+        {{0, -1}, 270},  // Down
+        {{1, -1}, 315}   // Down-Right
+    };
+
+    auto it = directionMap.find(p);
+    int dir = (it != directionMap.end()) ? it->second : -1; // Return -1 for invalid direction
+    std::cerr << "===> " << p.first << "," << p.second << " => dir: " << dir << std::endl;
+    return dir;
+}
+
+float GDDistanceMap::getMove(godot::Vector2 from, godot::Vector2 to, int type) {
+	std::cerr << "FROM:" << from.x << "," << from.y << " TO " << to.x << "," << to.y << "   cell:" << info.mCellWidth << "x" << info.mCaveHeight << std::endl;
+	GridType::Point fromPnt = {from.x/(info.mCellWidth*8), from.y/(info.mCellHeight*8) };
+	GridType::Point toPnt = {to.x/(info.mCellWidth*8), to.y/(info.mCellHeight*8) };
+	std::cerr << "===GETMOVE: " << fromPnt.first << "," << fromPnt.second << " TO " << toPnt.first << "," << toPnt.second << std::endl;
+//FIXME: XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
+#if 0
+	return 0;
+#else
+	float ang = getNextMove(graph, fromPnt, toPnt);
+	std::cerr << "  RET " << ang << std::endl;
+	return ang;
+#endif
+}
+

@@ -17,7 +17,7 @@ namespace DistanceMap {
 //
 // non-0 = wall
 //
-std::vector<std::vector<int>> makeWallDistanceGrid(const GridToGraph::Grid& grid)
+std::vector<std::vector<int>> makeWallDistanceGrid(const GridType::Grid& grid)
 {
     int rows = grid.size();
     int cols = grid[0].size();
@@ -72,7 +72,7 @@ std::vector<std::vector<int>> makeWallDistanceGrid(const GridToGraph::Grid& grid
 //
 // Function to compute directional distances
 //
-SightGrid makeSightGrid(const GridToGraph::Grid& grid)
+SightGrid makeSightGrid(const GridType::Grid& grid)
 {
     int rows = grid.size();
     int cols = grid[0].size();

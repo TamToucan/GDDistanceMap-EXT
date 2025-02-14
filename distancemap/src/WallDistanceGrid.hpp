@@ -2,7 +2,7 @@
 #define DISTANCEMAP_SRC_WALLDISTANCEGRID_HPP_
 
 #include <vector>
-#include "GridToGraph.hpp"
+#include "GridTypes.hpp"
 
 namespace DistanceMap {
 
@@ -16,7 +16,7 @@ std::vector<std::vector<int>> makeWallDistanceGrid(const std::vector<std::vector
 
 // A grid where each entry is a packed dist can see before Wall
 struct SightGrid {
-	GridToGraph::Grid sight;
+	GridType::Grid sight;
 	int getNorth(int x, int y) { return sight[y][x] & 0xff; }
 	int getEast(int x, int y) { return (sight[y][x] & 0xff00) >> 8; }
 	int getSouth(int x, int y) { return (sight[y][x] & 0xff0000) >> 16; }
@@ -24,7 +24,7 @@ struct SightGrid {
 };
 
 
-SightGrid makeSightGrid(const GridToGraph::Grid& grid);
+SightGrid makeSightGrid(const GridType::Grid& grid);
 
 }
 

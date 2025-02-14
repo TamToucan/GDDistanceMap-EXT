@@ -7,6 +7,7 @@
 #include <godot_cpp/classes/object.hpp>
 #include <godot_cpp/classes/tile_map_layer.hpp>
 #include "GridToGraph.hpp"
+#include "GridTypes.hpp"
 #include "WallDistanceGrid.hpp"
 
 namespace godot {
@@ -35,7 +36,7 @@ protected:
 
 	Info info;
 
-    GridToGraph::Grid wallDistGrid;
+    GridType::Grid wallDistGrid;
     DistanceMap::SightGrid sightGrid;
 	GridToGraph::Graph graph;
 
