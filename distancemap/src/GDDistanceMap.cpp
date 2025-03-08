@@ -164,7 +164,23 @@ double getNextMove(const GridToGraph::Graph& graph, const GridType::Point& sourc
 {
     const GridToGraph::GridPointInfo& sourceInfo = graph.navGrid[source.second][source.first];
     const GridToGraph::GridPointInfo& targetInfo = graph.navGrid[target.second][target.first];
-	std::cerr << "]GETNEXTMOVE: " << sourceInfo.closestAbstractEdgeIdx << " " << targetInfo.closestAbstractEdgeIdx << std::endl;
+	std::cerr << "]GETNEXTMOVE: "
+			<< "FRM abE idx: " << sourceInfo.closestAbstractEdgeIdx
+			<< " (abN " << graph.abstractEdges[sourceInfo.closestAbstractEdgeIdx].from << " ->"
+			<< " " << graph.abstractEdges[sourceInfo.closestAbstractEdgeIdx].to<< ")" << std::endl
+			<< " abN idx: " << sourceInfo.closestAbstractNodeIdx
+			<< " (bN: " << graph.abstractNodes[sourceInfo.closestAbstractNodeIdx].baseCenterNode
+			<< " " << graph.baseNodes[graph.abstractNodes[sourceInfo.closestAbstractNodeIdx].baseCenterNode].first
+			<< "," << graph.baseNodes[graph.abstractNodes[sourceInfo.closestAbstractNodeIdx].baseCenterNode].second << ")\n"
+
+			<< "TO abE idx: " << targetInfo.closestAbstractEdgeIdx
+			<< " (abN " << graph.abstractEdges[targetInfo.closestAbstractEdgeIdx].from << " ->"
+			<< " " << graph.abstractEdges[targetInfo.closestAbstractEdgeIdx].to<< ")" << std::endl
+			<< " abN idx: " << targetInfo.closestAbstractNodeIdx
+			<< " (bN: " << graph.abstractNodes[targetInfo.closestAbstractNodeIdx].baseCenterNode
+			<< " " << graph.baseNodes[graph.abstractNodes[targetInfo.closestAbstractNodeIdx].baseCenterNode].first
+			<< "," << graph.baseNodes[graph.abstractNodes[targetInfo.closestAbstractNodeIdx].baseCenterNode].second << ")"
+			<< std::endl;
 
     // **1. Check if already at or adjacent to the target**
     if (std::abs(source.first - target.first) <= 1 && std::abs(source.second - target.second) <= 1) {
@@ -177,6 +193,7 @@ double getNextMove(const GridToGraph::Graph& graph, const GridType::Point& sourc
     {
     	const auto& flowField = graph.flowFields[sourceInfo.closestAbstractEdgeIdx];
     	auto dirCostOpt = flowField.unpack(source);
+    	// Check if the source point is covered by this flow field
     	if (dirCostOpt) {
     		int dirIdx = dirCostOpt->first;
     		GridType::Point nextMove = {
