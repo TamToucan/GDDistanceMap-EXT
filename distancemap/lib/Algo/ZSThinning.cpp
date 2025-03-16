@@ -9,15 +9,6 @@ namespace Algo {
 using BinaryImage = std::vector<std::vector<int>>;
 
 namespace {
-// Function to display the binary image
-void displayImage(const BinaryImage& image) {
-    for (const auto& row : image) {
-        for (int pixel : row) {
-            std::cout << (pixel ? "@" : ".") << " ";
-        }
-        std::cout << "\n";
-    }
-}
 
 // Count the number of non-zero neighbors around a pixel
 int countNeighbors(const BinaryImage& image, int x, int y) {
@@ -94,7 +85,7 @@ bool thinningIteration(BinaryImage& image, bool firstSubIteration)
 //
 // Zhang-Suen Thinning Algorithm
 //
-void ZSThinning(std::vector< std::vector<int> >& grid)
+void ZSThinning(BinaryImage& grid)
 {
     bool changed;
     do {
@@ -102,6 +93,5 @@ void ZSThinning(std::vector< std::vector<int> >& grid)
         changed |= thinningIteration(grid, false); // Second sub-iteration
     } while (changed);
 }
-
 
 }

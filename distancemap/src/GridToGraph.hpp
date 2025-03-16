@@ -34,7 +34,6 @@ struct Edge {
 };
 
 struct AbstractNode {
-    int id;                       // ID of the cluster
     std::vector<int> baseNodes;   // Indices of nodes in the cluster
     std::vector<int> baseDeadEnds; // Indices of deadEnds in the cluster
     GridType::Point center;        // Geometric center of the cluster
