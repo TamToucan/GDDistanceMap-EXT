@@ -15,44 +15,11 @@ const int DEND = 0x020000;
 const int EDGE = 0x040000;
 const int XPND = 0x080000;
 
-
-struct PairHash {
-    template <typename T1, typename T2>
-    std::size_t operator()(const std::pair<T1, T2>& p) const {
-        return std::hash<T1>()(p.first) ^ (std::hash<T2>()(p.second) << 1);
-    }
-};
+using namespace GridType;
 
 // For INPUT GRID
 const int EMPTY = 0x00;
 const int PATH = 0x01; // NOTE: Must be 1 for dead end detection
-
-struct Edge {
-    int from, to;   // Indices of connected nodes or deadEnds
-    bool toDeadEnd; // Whether `to` refers to a deadEnd
-    GridType::Path path;      // Path between the points
-};
-
-struct AbstractNode {
-    std::vector<int> baseNodes;   // Indices of nodes in the cluster
-    std::vector<int> baseDeadEnds; // Indices of deadEnds in the cluster
-    GridType::Point center;        // Geometric center of the cluster
-    int baseCenterNode;			  // index of closest baseNode
-};
-
-struct AbstractEdge {
-    int from, to; // Indices of connected abstract nodes
-    std::vector<int> baseEdges;
-    GridType::Path path;
-
-    bool operator<(const AbstractEdge& other) const {
-        if (from != other.from) return from < other.from;
-        return to < other.to;
-    }
-};
-
-
-using AbstractGraph = std::pair<std::vector<AbstractNode>, std::vector<AbstractEdge>>;
 
 
 struct GridPointInfo {

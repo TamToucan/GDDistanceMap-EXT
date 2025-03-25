@@ -16,7 +16,6 @@
 #include <godot_cpp/godot.hpp>
 #include <GDDistanceMap.hpp>
 
-#include "WallDistanceGrid.hpp"
 #include "GridToGraph.hpp"
 #include "GridTypes.hpp"
 #include "MathUtils.h"
@@ -44,7 +43,7 @@ GDDistanceMap::~GDDistanceMap() {
 GDDistanceMap* GDDistanceMap::setCaveSize(godot::Vector2i sz) {
 	info.mCaveWidth = sz.width;
 	info.mCaveHeight = sz.height;
-	std::cerr << "CAVE: " << info.mCaveWidth << "x" << info.mCaveHeight << std::endl;
+	std::cerr << "SET CAVE: " << info.mCaveWidth << "x" << info.mCaveHeight << std::endl;
 	return this;
 }
 
