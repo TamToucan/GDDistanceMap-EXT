@@ -1,4 +1,3 @@
-#include <AbstractMST.hpp>
 #include <iostream>
 #include <vector>
 #include <stack>
@@ -548,7 +547,7 @@ void markGridBoundaries(Grid& grid) {
     for (int r = 1; r < rows-1; ++r) {
         for (int c = 1; c < cols-1; ++c) {
         	// Find non walls
-            if (not (grid[r][c]&WALL)) {
+            if (! (grid[r][c]&WALL)) {
             	// Check all the neighbors for a wall
             	for (const auto& [dr, dc] : GridType::directions) {
             		int nr = r + dr, nc = c + dc;
@@ -690,12 +689,12 @@ private:
 		int node1 = endRC&0xffff;
 		bool isDead0 = (startRC&DEND);
 		bool isDead1 = (endRC&DEND);
-		bool isDeadEnd = isDead0 or isDead1;
-		bool bothDead = isDeadEnd and (isDead0 == isDead1);
+		bool isDeadEnd = isDead0 || isDead1;
+		bool bothDead = isDeadEnd && (isDead0 == isDead1);
 
 		// Should not both be dead and if Node0 == Node1 then one must be a deadEnd
-		bool startEndOk = (!bothDead) and ((node0 != node1) or isDeadEnd);
-		if (not startEndOk) {
+		bool startEndOk = (!bothDead) && ((node0 != node1) || isDeadEnd);
+		if (! startEndOk) {
 			std::cerr << "#START = END: " << (isDead0 ? "DEAD " : "") << node0
 					<< " == " << (isDead1 ? "DEAD " : "") << node1 << std::endl;
 			return false;
@@ -726,7 +725,7 @@ private:
 		std::cerr << std::endl;
 
 		// Ensure Node1 is the dead, or if none dead then node0 is the lower
-		if (isDead0 or (!isDeadEnd and node0 > node1)) {
+		if (isDead0 || (!isDeadEnd && (node0 > node1))) {
 			std::swap(isDead0, isDead1);
 			std::swap(node0, node1);
 			std::reverse(path.begin(), path.end());
@@ -1242,48 +1241,11 @@ std::vector<AbstractNode> createAbstractNodes(
         cluster.center.first /= totalPoints;
         cluster.center.second /= totalPoints;
     }
-#if 0
-    // Step 3: Create Abstract Edges
-    std::unordered_map<std::pair<int, int>, AbstractEdge, PairHash> abstractEdgeMap;
-    for (int edgeIdx = 0; edgeIdx < edges.size(); ++edgeIdx) {
-        const auto& edge = edges[edgeIdx];
-        int clusterFrom = clusterLabels[edge.from];
-        int clusterTo = edge.toDeadEnd ? clusterLabels[nodes.size() + edge.to]
-                                       : clusterLabels[edge.to];
-
-        std::cerr << "EDGEIDX: " << edgeIdx << (edge.toDeadEnd ? "(DEAD) " : "") << " base:" << edge.from << "-" << edge.to
-        		<< " => " << clusterFrom << " -> " << clusterTo << std::endl;
-        if (edge.toDeadEnd) {
-        	std::cerr << "   (to " << edge.to << "+" << nodes.size() <<"=" << (nodes.size() + edge.to) << " => cluster " << clusterTo
-        			<< std::endl;
-        }
-
-
-        if (clusterFrom < 0 || clusterTo < 0 || clusterFrom == clusterTo) {
-            continue;
-        }
-
-        auto edgeKey = std::make_pair(clusterFrom, clusterTo);
-        if (abstractEdgeMap.find(edgeKey) == abstractEdgeMap.end()) {
-        	std::cerr << " => ADD " << clusterFrom << "->"<<clusterTo << std::endl;
-            abstractEdgeMap[edgeKey] = {clusterFrom, clusterTo, {}, {}};
-        }
-        std::cerr << " MAP key => eddgeIdx: " << edgeIdx << std::endl;
-        abstractEdgeMap[edgeKey].baseEdges.push_back(edgeIdx);
-    }
-#endif
     // Step 3: Collect abstract nodes into a vector
     std::vector<AbstractNode> abstractNodes;
     for (const auto& [_, cluster] : clusters) {
     	abstractNodes.push_back(cluster);
     }
-#if 0
-    std::vector<AbstractEdge> abstractEdges;
-    for (auto& [_, abEdge] : abstractEdgeMap) {
-        abstractEdges.push_back(abEdge);
-        std::cerr << "MADE ABEDGE " <<abstractEdges.size()-1 << ": " << abEdge.from << " -> " << abEdge.to << std::endl;
-    }
-#endif
 
     int i = 0;
     // Step 4: Assign closest base node to each abstract node
@@ -1298,461 +1260,7 @@ std::vector<AbstractNode> createAbstractNodes(
         ++idx;
     }
 
-#if 0
-    // Step 5: Compute paths between abstract nodes
-    std::unordered_map<std::pair<int, int>, Path, PairHash> fromtoPathMap;
-    for (auto& abEdge : abstractEdges) {
-        int fromCentral = closestMap[abEdge.from];
-        int toCentral = closestMap[abEdge.to];
-
-    	std::cerr << "##ABEDGE: " << abEdge.from
-    			<< " (" << fromCentral << ") "
-    			<< " -> " << abEdge.to
-    			<< " (" << toCentral << ")"
-				<< std::endl;
-
-        auto pathKey = std::make_pair(fromCentral, toCentral);
-        if (fromtoPathMap.find(pathKey) != fromtoPathMap.end()) {
-    	std::cerr << "  => have Path:" << abEdge.path.size() << std::endl;
-            abEdge.path = fromtoPathMap[pathKey];
-        } else {
-            abEdge.path = findPathBetweenNodes(fromCentral, toCentral, edges, nodes);
-            fromtoPathMap[pathKey] = abEdge.path;
-        }
-    }
-    return {abstractNodes, abstractEdges};
-#endif
     return abstractNodes;
-}
-///////////////////////////////////////////////////////////////////////
-
-#ifdef XXX_ALMOST
-std::unordered_set<int> buildAbstractBaseSet(const std::vector<AbstractNode>& abstractNodes) {
-    std::unordered_set<int> s;
-    for (const auto& an : abstractNodes) {
-        s.insert(an.baseCenterNode);
-    }
-    return s;
-}
-
-// Given the underlying graph (edges and baseNodes) and the abstract nodes,
-// generate a set of AbstractEdges connecting only those abstract nodes by a path that does not pass through any intermediate abstract node.
-std::vector<AbstractEdge> createAbstractEdges(
-    const std::vector<Point>& baseNodes,
-    const std::vector<Edge>& edges,
-    const std::vector<AbstractNode>& abstractNodes)
-{
-	std::vector<AbstractEdge> abstractEdges;
-    // Build a set of base node indices that belong to abstract nodes.
-    std::unordered_set<int> abstractBaseSet = buildAbstractBaseSet(abstractNodes);
-
-    // Build an adjacency list for the base graph.
-    // Each AdjEntry stores the neighbor, the index of the underlying edge used,
-    // whether we travel in the stored direction (forward) or reversed, and the cost.
-    struct AdjEntry {
-        int neighbor;    // Adjacent base node index.
-        int edgeIndex;   // Which Edge from the edges std::vector.
-        bool forward;    // true: use edge as stored; false: reverse the edge's path.
-        int cost;        // For our grid, cost = path.size() (each adjacent step costs 1).
-    };
-
-    int numBaseNodes = baseNodes.size();
-    std::vector<std::vector<AdjEntry>> graph(numBaseNodes);
-
-    // For each Edge, add two entries (one for each direction).
-    for (int i = 0; i < edges.size(); i++) {
-        const Edge& e = edges[i];
-        if (e.toDeadEnd) continue;
-        int cost = static_cast<int>(e.path.size());
-        // Forward: from -> to.
-        graph[e.from].push_back({e.to, i, true, cost});
-        // Reverse: to -> from.
-        graph[e.to].push_back({e.from, i, false, cost});
-    }
-
-    int numAbstractNodes = abstractNodes.size();
-
-    // For every abstract node as the source (using its base node as the start)
-    for (int i = 0; i < numAbstractNodes; i++) {
-        int start = abstractNodes[i].baseCenterNode;
-
-        // Run Dijkstra's algorithm from the start base node.
-        std::vector<int> dist(numBaseNodes, std::numeric_limits<int>::max());
-        std::vector<int> prev(numBaseNodes, -1);
-        // For each node, record which edge was used (and direction) to get there.
-        std::vector<std::pair<int, bool>> usedEdge(numBaseNodes, {-1, true});
-
-        using NodeCost = std::pair<int, int>;  // (distance, base node)
-        std::priority_queue<NodeCost, std::vector<NodeCost>, std::greater<NodeCost>> pq;
-
-        dist[start] = 0;
-        pq.push({0, start});
-
-        while (!pq.empty()) {
-            auto [d, u] = pq.top();
-            pq.pop();
-            if (d > dist[u])
-                continue;
-
-            // Explore neighbors.
-            for (const AdjEntry &adj : graph[u]) {
-                int v = adj.neighbor;
-                int nd = d + adj.cost;
-                if (nd < dist[v]) {
-                    dist[v] = nd;
-                    prev[v] = u;
-                    usedEdge[v] = {adj.edgeIndex, adj.forward};
-                    pq.push({nd, v});
-                }
-            }
-        }
-
-        // For each candidate target abstract node (avoid duplicate std::pairs by ensuring j > i).
-        for (int j = i + 1; j < numAbstractNodes; j++) {
-            int target = abstractNodes[j].baseCenterNode;
-            if (dist[target] == std::numeric_limits<int>::max())
-                continue; // Not reachable.
-
-            // Reconstruct the sequence of base nodes (as indices) along the shortest path.
-            std::vector<int> nodeSequence;
-            int cur = target;
-            while (cur != -1) {
-                nodeSequence.push_back(cur);
-                if (cur == start)
-                    break;
-                cur = prev[cur];
-            }
-            reverse(nodeSequence.begin(), nodeSequence.end());
-
-            // Check if any intermediate node (excluding endpoints) is also an abstract node.
-            bool hasIntermediateAbstract = false;
-            for (size_t k = 1; k + 1 < nodeSequence.size(); k++) {
-                if (abstractBaseSet.count(nodeSequence[k]) > 0) {
-                    hasIntermediateAbstract = true;
-                    break;
-                }
-            }
-            // Skip this candidate if an intermediate abstract node is present.
-            if (hasIntermediateAbstract)
-                continue;
-
-            // Otherwise, reconstruct the full concatenated path by backtracking using the recorded usedEdge information.
-            std::vector<std::pair<int, bool>> edgeSequence;
-            cur = target;
-            while (cur != start) {
-                edgeSequence.push_back(usedEdge[cur]);
-                cur = prev[cur];
-            }
-            std::reverse(edgeSequence.begin(), edgeSequence.end());
-
-            Path fullPath;
-            bool firstSegment = true;
-            for (auto [edgeIdx, forward] : edgeSequence) {
-                const Path &edgePath = edges[edgeIdx].path;
-                Path segment = edgePath;  // Make a copy.
-                if (!forward) {
-                    // Reverse the segment if traversing backward.
-                    reverse(segment.begin(), segment.end());
-                }
-                // Remove duplicate junction point (if not the first segment).
-                if (!firstSegment && !segment.empty()) {
-                    segment.erase(segment.begin());
-                }
-                fullPath.insert(fullPath.end(), segment.begin(), segment.end());
-                firstSegment = false;
-            }
-
-            // Add the AbstractEdge from abstract node i to j.
-            AbstractEdge ae;
-            ae.from = i;
-            ae.to = j;
-            ae.path = fullPath;
-            abstractEdges.push_back(ae);
-        }
-    }
-    return abstractEdges;
-}
-#else
-std::vector<AbstractEdge> createAbstractEdges(
-    const std::vector<Point>& baseNodes,
-    const std::vector<Edge>& edges,
-    const std::vector<AbstractNode>& abstractNodes)
-{
-    std::vector<AbstractEdge> abstractEdges;
-    // Build a set of base node indices that belong to abstract nodes.
-    std::unordered_set<int> abstractBaseSet;
-    for (const auto& an : abstractNodes) {
-        abstractBaseSet.insert(an.baseCenterNode);
-    }
-
-    // Build an adjacency list for the underlying base graph.
-    // Each edge is added in both directions.
-    struct AdjEntry {
-        int neighbor;   // Adjacent base node index.
-        int edgeIndex;  // Which Edge from the edges std::vector.
-        bool forward;   // true: use edge as stored; false: use reversed edge.
-        int cost;       // Cost is path.size() since each step costs 1.
-    };
-
-    int numBaseNodes = baseNodes.size();
-    std::vector<std::vector<AdjEntry>> graph(numBaseNodes);
-
-    // Add each Edge in both directions.
-    for (int i = 0; i < edges.size(); i++) {
-        const Edge& e = edges[i];
-        if (e.toDeadEnd) continue;
-        int cost = static_cast<int>(e.path.size());
-        // Forward direction: from -> to.
-        graph[e.from].push_back({e.to, i, true, cost});
-        // Reverse direction: to -> from.
-        graph[e.to].push_back({e.from, i, false, cost});
-    }
-
-    int numAbstractNodes = abstractNodes.size();
-
-    // For every abstract node as a source, run Dijkstra over the base graph.
-    for (int i = 0; i < numAbstractNodes; i++) {
-        int start = abstractNodes[i].baseCenterNode;
-
-        // Dijkstra's containers.
-        std::vector<int> dist(numBaseNodes, std::numeric_limits<int>::max());
-        std::vector<int> prev(numBaseNodes, -1);
-        // Record the underlying edge (and direction) used to get to each node.
-        std::vector<std::pair<int, bool>> usedEdge(numBaseNodes, {-1, true});
-
-        using NodeCost = std::pair<int, int>;  // (cost, base node)
-        std::priority_queue<NodeCost, std::vector<NodeCost>, std::greater<NodeCost>> pq;
-
-        dist[start] = 0;
-        pq.push({0, start});
-
-        while (!pq.empty()) {
-            auto [d, u] = pq.top();
-            pq.pop();
-            if (d > dist[u])
-                continue;
-
-            // Relax neighbors.
-            for (const AdjEntry &adj : graph[u]) {
-                int v = adj.neighbor;
-                int nd = d + adj.cost;
-                if (nd < dist[v]) {
-                    dist[v] = nd;
-                    prev[v] = u;
-                    usedEdge[v] = {adj.edgeIndex, adj.forward};
-                    pq.push({nd, v});
-                }
-            }
-        }
-
-        // For every candidate target abstract node (with j > i to avoid duplicates).
-        for (int j = i + 1; j < numAbstractNodes; j++) {
-            int target = abstractNodes[j].baseCenterNode;
-            if (dist[target] == std::numeric_limits<int>::max())
-                continue; // Not reachable.
-
-            // Reconstruct the sequence of base nodes from start to target.
-            std::vector<int> nodeSequence;
-            int cur = target;
-            while (cur != -1) {
-                nodeSequence.push_back(cur);
-                if (cur == start)
-                    break;
-                cur = prev[cur];
-            }
-            reverse(nodeSequence.begin(), nodeSequence.end());
-
-            // Check for intermediate abstract nodes.
-            // (Ignore the first and last nodes which are our endpoints.)
-            bool redundant = false;
-            for (size_t k = 1; k + 1 < nodeSequence.size(); k++) {
-                if (abstractBaseSet.count(nodeSequence[k]) > 0) {
-                    redundant = true;
-                    break;
-                }
-            }
-            // If the candidate path passes through an abstract node,
-            // it is redundant (overlapping with a shorter abstract edge already present).
-            if (redundant)
-                continue;
-
-            // Reconstruct the concatenated path using the underlying edges.
-            std::vector<std::pair<int, bool>> edgeSequence;
-            cur = target;
-            while (cur != start) {
-                edgeSequence.push_back(usedEdge[cur]);
-                cur = prev[cur];
-            }
-            reverse(edgeSequence.begin(), edgeSequence.end());
-
-            Path fullPath;
-            bool firstSegment = true;
-            for (auto [edgeIdx, forward] : edgeSequence) {
-                const Path &edgePath = edges[edgeIdx].path;
-                Path segment = edgePath;  // Make a copy.
-                if (!forward) {
-                    // Reverse the segment if traversing in reverse.
-                    reverse(segment.begin(), segment.end());
-                }
-                // Remove duplicate junction point (if not the first segment).
-                if (!firstSegment && !segment.empty()) {
-                    segment.erase(segment.begin());
-                }
-                fullPath.insert(fullPath.end(), segment.begin(), segment.end());
-                firstSegment = false;
-            }
-
-            // Add the AbstractEdge connecting abstractNodes i and j.
-            AbstractEdge ae;
-            ae.from = i;
-            ae.to = j;
-            ae.path = fullPath;
-            abstractEdges.push_back(ae);
-        }
-    }
-    return abstractEdges;
-}
-
-#endif
-
-///////////////////////////////////////////////////////////////////////
-
-
-// Greedy Nearest-Neighbor method to connect AbstractNodes.
-// Starting from AbstractNode0, this function iteratively connects the current AbstractNode
-// to the closest unvisited AbstractNode (via the shortest baseEdge path) ensuring that
-// the endpoints are different and that baseEdges flagged as toDeadEnd are not used.
-void generateGreedyAbstractEdges(const std::vector<Edge>& edges,
-                                 const std::vector<Point>& baseNodes,
-                                 const std::vector<AbstractNode>& abstractNodes,
-                                 std::vector<AbstractEdge>& abstractEdges)
-{
-    int numAbstractNodes = static_cast<int>(abstractNodes.size());
-    if (numAbstractNodes < 2)
-        return;  // Need at least 2 nodes to create an edge.
-
-    // Build the base graph as an adjacency list.
-    // Each edge is represented in both directions, except edges flagged as toDeadEnd.
-    struct AdjEntry {
-        int neighbor;   // Adjacent base node index.
-        int edgeIndex;  // Index into the 'edges' vector.
-        bool forward;   // true if traversing the edge in the stored direction.
-        int cost;       // Cost is the size of the path (each step counts as 1).
-    };
-
-    int numBaseNodes = static_cast<int>(baseNodes.size());
-    std::vector<std::vector<AdjEntry>> graph(numBaseNodes);
-
-    // Populate the graph with each edge in both directions,
-    // but skip any edge that is marked as a dead end.
-    for (int i = 0; i < static_cast<int>(edges.size()); i++) {
-        const Edge& e = edges[i];
-        if (e.toDeadEnd)
-            continue;  // Skip dead-end edges.
-        int cost = static_cast<int>(e.path.size());
-        // Forward direction: from -> to.
-        graph[e.from].push_back({e.to, i, true, cost});
-        // Reverse direction: to -> from.
-        graph[e.to].push_back({e.from, i, false, cost});
-    }
-
-    // Track which abstract nodes have been connected.
-    std::vector<bool> visited(numAbstractNodes, false);
-    int visitedCount = 0;
-
-    // Start with AbstractNode0.
-    int current = 0;
-    visited[current] = true;
-    visitedCount++;
-
-    // Continue until all abstract nodes are connected.
-    while (visitedCount < numAbstractNodes) {
-        int startBase = abstractNodes[current].baseCenterNode;
-
-        // Run Dijkstra's algorithm from current abstract node's base node.
-        std::vector<int> dist(numBaseNodes, std::numeric_limits<int>::max());
-        std::vector<int> prev(numBaseNodes, -1);
-        // Record which underlying edge (and its direction) was used to reach each base node.
-        std::vector<std::pair<int, bool>> usedEdge(numBaseNodes, std::make_pair(-1, true));
-
-        using NodeCost = std::pair<int, int>;  // (cost, base node)
-        std::priority_queue<NodeCost, std::vector<NodeCost>, std::greater<NodeCost>> pq;
-
-        dist[startBase] = 0;
-        pq.push({0, startBase});
-
-        while (!pq.empty()) {
-            auto [d, u] = pq.top();
-            pq.pop();
-            if (d > dist[u])
-                continue;
-
-            for (const AdjEntry &adj : graph[u]) {
-                int v = adj.neighbor;
-                int nd = d + adj.cost;
-                if (nd < dist[v]) {
-                    dist[v] = nd;
-                    prev[v] = u;
-                    usedEdge[v] = {adj.edgeIndex, adj.forward};
-                    pq.push({nd, v});
-                }
-            }
-        }
-
-        // Find the closest unvisited AbstractNode (by its base node) that is not the current node.
-        int nearestIdx = -1;
-        int nearestDist = std::numeric_limits<int>::max();
-        for (int j = 0; j < numAbstractNodes; j++) {
-            if (!visited[j] && j != current) {
-                int candidateBase = abstractNodes[j].baseCenterNode;
-                if (dist[candidateBase] < nearestDist) {
-                    nearestIdx = j;
-                    nearestDist = dist[candidateBase];
-                }
-            }
-        }
-
-        // If no unvisited AbstractNode is reachable, break.
-        if (nearestIdx == -1)
-            break;
-
-        int targetBase = abstractNodes[nearestIdx].baseCenterNode;
-
-        // Reconstruct the shortest path from startBase to targetBase.
-        std::vector<std::pair<int, bool>> edgeSequence;
-        int cur = targetBase;
-        while (cur != startBase) {
-            edgeSequence.push_back(usedEdge[cur]);
-            cur = prev[cur];
-        }
-        std::reverse(edgeSequence.begin(), edgeSequence.end());
-
-        Path fullPath;
-        bool firstSegment = true;
-        for (auto [edgeIdx, forward] : edgeSequence) {
-            const Path &edgePath = edges[edgeIdx].path;
-            Path segment = edgePath;  // Copy the segment.
-            if (!forward)
-                std::reverse(segment.begin(), segment.end());
-            // Remove duplicate junction point (if not the first segment).
-            if (!firstSegment && !segment.empty())
-                segment.erase(segment.begin());
-            fullPath.insert(fullPath.end(), segment.begin(), segment.end());
-            firstSegment = false;
-        }
-
-        // Create the AbstractEdge from the current abstract node to the nearest unvisited one.
-        AbstractEdge ae;
-        ae.from = current;
-        ae.to = nearestIdx;
-        ae.path = fullPath;
-        abstractEdges.push_back(ae);
-
-        // Mark the nearest AbstractNode as visited and move on.
-        visited[nearestIdx] = true;
-        visitedCount++;
-        current = nearestIdx;
-    }
 }
 
 ///////////////////////////////////////////////////////////////////////
@@ -2148,9 +1656,7 @@ Graph makeGraph(const Grid& floorGrid)
 		makeTGA("GRID_ALL_NODES.tga", tempGrid);
 	}
 
-	graph.abstractEdges.clear();
-	generateGreedyAbstractEdges(graph.baseEdges, graph.baseNodes, graph.abstractNodes, graph.abstractEdges);
-	graph.abstractEdges.clear();
+    // Make Min Span Tree of abstract nodes to get abstract edges
 	AbstractMST::generateMSTAbstractEdges(graph.baseEdges, graph.baseNodes, graph.abstractNodes, graph.abstractEdges);
 
 	//
@@ -2177,11 +1683,10 @@ Graph makeGraph(const Grid& floorGrid)
 					tempGrid[n.second][n.first] = NODE;
 				}
 			}
-			std::string f ="GRID_ABSTRACT_"+std::to_string(idx)+".tga";
-			std::cerr << "## "<<idx<<"  "<<f<<"  ab:" << e.from << " -> " << e.to << " (base: "
+			std::cerr << "## ABEDGE "<<idx<<"   ab:" << e.from << " -> " << e.to << " (base: "
 					<< graph.abstractNodes[ e.from ].baseCenterNode << " -> " << graph.abstractNodes[ e.to ].baseCenterNode << ")" << std::endl;
-			makeTGA(f.c_str(), tempGrid);
 		}
+		makeTGA("GRID_ABSTRACT.tga", tempGrid);
 	}
 
 	int abIdx=0;

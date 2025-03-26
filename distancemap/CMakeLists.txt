@@ -1,5 +1,5 @@
 project(GDDistanceMap)
-
+    
 # Automatically pick up files added to src
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
         "${CMAKE_CURRENT_SOURCE_DIR}/src/*.h"
@@ -28,6 +28,8 @@ target_link_libraries(${LIB_NAME}
 	PRIVATE Stuff
 	PRIVATE Algo
 	PUBLIC godot::cpp)
+
+target_include_directories(${LIB_NAME} PRIVATE -isystem ${FETCHCONTENT_BASE_DIR})
 
 add_custom_command(
         TARGET ${LIB_NAME}  POST_BUILD

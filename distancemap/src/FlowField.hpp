@@ -20,7 +20,7 @@ using FlowFieldData = uint32_t;
 
 struct SparseFlowField {
     std::unordered_map<GridType::Point, FlowFieldData, GridType::PairHash> flowData;
-    // Reurns
+    // Returns
     std::optional<std::pair<int, int>> unpack(const GridType::Point& point) const;
 };
 
