@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 
 #include "FlowField.hpp"
@@ -27,10 +28,19 @@ struct GridPointInfo {
     int closestBaseEdgeIdx = -1;
     int closestAbstractEdgeIdx = -1;
     int closestAbstractNodeIdx = -1;
+	int distanceToAbstractNode = std::numeric_limits<int>::max();
     int directionToFromNode = -1; // Index into the directions array
     int directionToToNode = -1;   // Index into the directions array
     double angleToFromNode = 0.0; // Granular angle to the "from" node in degrees
     double angleToToNode = 0.0;   // Granular angle to the "to" node in degrees
+    bool hasFlowFieldCoverage = false; // If part of a FlowField
+};
+
+struct ZoneInfo
+{
+	std::vector<int> baseNodes;
+	std::vector<int> baseEdgeIdxs;
+    std::vector<int> adjacentZones;
 };
 
 // 2D grid of information for each cell to aid navigation
@@ -56,6 +66,8 @@ using FallbackGrid = std::vector<std::vector<FallbackCell>>;
 struct Graph {
     GridType::Grid infoGrid;
     NavGrid navGrid;
+	std::vector<ZoneInfo> zones;
+    std::unordered_map<int, std::unordered_set<int>> adjacentZones;
     FallbackGrid fallbackGrid;
     BaseGraph baseGraph;
     std::vector<FlowField::SparseFlowField> flowFields;

@@ -19,8 +19,8 @@ using Path = std::vector<Point>;
 
     // Directions for 8 neighbouring cells
 const static std::vector<GridType::Point> directions = {
-		{-1, 0}, {1, 0}, {0, -1}, {0, 1}, // Up, Down, Left, Right
-		{-1, -1}, {-1, 1}, {1, -1}, {1, 1} // Diagonals
+		{0, -1}, {0, 1}, {-1, 0}, {1, 0}, // Up, Down, Left, Right
+		{-1, -1}, {1, -1}, {1, 1}, {-1, 1} // Diagonals
 };
 
 
@@ -39,7 +39,6 @@ struct AbstractNode {
 
 struct AbstractEdge {
     int from, to; // Indices of connected abstract nodes
-    std::vector<int> baseEdges;
     GridType::Path path;
 
     bool operator<(const AbstractEdge& other) const {
