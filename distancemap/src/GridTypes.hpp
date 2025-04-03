@@ -32,7 +32,6 @@ struct Edge {
 
 struct AbstractNode {
     std::vector<int> baseNodes;   // Indices of nodes in the cluster
-    std::vector<int> baseDeadEnds; // Indices of deadEnds in the cluster
     GridType::Point center;        // Geometric center of the cluster
     int baseCenterNode;			  // index of closest baseNode
 };
@@ -49,6 +48,22 @@ struct AbstractEdge {
 
 
 using AbstractGraph = std::pair<std::vector<AbstractNode>, std::vector<AbstractEdge>>;
+
+struct BaseGraphInfo {
+    int neighbor;   // Neighboring base node index.
+    int edgeIndex;  // Index into the edges vector.
+    bool forward;   // True if neighbor is the TO and indexing by FROM.
+    int cost;       // Cost is the length of the edge path.
+};
+
+//            |-----baseEdge-----|
+// Graph of Base nodes -> Base Node and EdgeIdx and Cost
+// The from->to and to->from is stored for each baseEdge
+using BaseGraph = std::vector< std::vector<BaseGraphInfo> >;
+
+std::vector<int> checkConnectivity(const BaseGraph& graph, int numBaseNodes);
+
+BaseGraph buildBaseGraph(const std::vector<Edge>& edges, int numBaseNodes);
 
 }
 

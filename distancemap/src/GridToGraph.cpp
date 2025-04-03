@@ -659,46 +659,7 @@ Path simplifyPath(const Path& inPath) {
 
     return simplePath;
 }
-#if 0
-Path simplifyPath(const Path& inPath)
-{
-    Path simplePath;
 
-    if (inPath.size() < 3) {
-        // If there are less than 3 points, we can't simplify further.
-        return inPath;
-    }
-
-    simplePath.push_back(inPath[0]); // Always keep the first point
-
-    for (size_t i = 1; i < inPath.size() - 1; i++) {
-        auto [x1, y1] = inPath[i - 1];  // Previous point
-        auto [x2, y2] = inPath[i];      // Current point
-        auto [x3, y3] = inPath[i + 1];  // Next point
-
-        std::cerr << "SIMPLIFY: " << x1 << "," << y1 << " -> " << x2 << "," << y2 << " -> " << x3 << "," << y3 << std::endl;
-        // Check if the transition (x1,y1) → (x3,y3) is a valid diagonal move
-        std::cerr << "SIMPLIFY: " << std::abs(x3 - x1) << " " << std::abs(y3 - y1);
-        if ((std::abs(x3-x1) == 1) && (std::abs(y3-y1) == 1)) {
-            // Skip (x2, y2) and directly add (x3, y3)
-            simplePath.push_back({x3, y3});
-			std::cerr << "   => skip" << std::endl;
-            i++; // Skip the intermediate point
-        } else {
-            // Otherwise, just add the current point
-            simplePath.push_back({x2, y2});
-			std::cerr << "   => keep" << std::endl;
-        }
-    }
-
-    // Always keep the last point
-    if (!simplePath.empty() && simplePath.back() != inPath.back()) {
-        simplePath.push_back(inPath.back());
-    }
-
-    return simplePath;
-}
-#endif
 /////////////////////////////////////////////////////////////////////////////////////////
 
 // Custom comparator as a lambda function
@@ -1053,14 +1014,9 @@ std::vector<Edge> findEdges(const std::vector<std::vector<int>>& grid,
             }
 
             std::cerr << std::endl;
-            std::cerr << std::endl;
             std::cerr <<"#PNT " << x <<","<< y << "   Grid: " << (grid[y][x]) << "\t\t\t" << std::endl;
 
             Path path = followPath(x,y,edgeAdder,visited);
-
-            if (path.empty()) {
-            	std::cerr << "EMPTY" << std::endl;
-            }
         }
     }
     const std::set<Edge, EdgeComparator>& edges = edgeAdder.getEdges();
@@ -1070,9 +1026,73 @@ std::vector<Edge> findEdges(const std::vector<std::vector<int>>& grid,
     return result;
 }
 
+std::vector<Edge> findNodeEdges(const std::vector<Point>& nodes, const std::vector<std::vector<int>>& grid)
+{
+    const int rows = (int)grid.size();
+    const int cols = (int)grid[0].size();
+    std::vector<std::vector<bool>> visited(rows, std::vector<bool>(cols, false));
+
+    EdgeAdder edgeAdder(grid);
+
+    std::cerr << "## FIND NODE EDGES for " << nodes.size() << " unconnected nodes" << std::endl;
+    for (const auto& n : nodes)
+    {
+        int x = n.first;
+        int y = n.second;
+        Path path;
+        do {
+            path = followPath(x, y, edgeAdder, visited);
+        } while (! path.empty());
+    }
+    const std::set<Edge, EdgeComparator>& edges = edgeAdder.getEdges();
+    std::vector<Edge> result;
+    result.reserve(edgeAdder.getEdges().size());
+    std::copy(edges.begin(), edges.end(), std::back_inserter(result));
+    std::cerr << "  FOUND " << result.size() << " edges" << std::endl;
+    return result;
+}
+
+
+BaseGraph fixBaseEdges(std::vector<Edge>& baseEdges, const Grid& infoGrid, const std::vector<Point>& baseNodes)
+{
+	// First Make a graph edgeNode1 -> list of (edgeNode2, edgeIndex, 1->2 flag, cost)
+    BaseGraph baseGraph = GridType::buildBaseGraph(baseEdges, baseNodes.size());
+
+	// Use graph to check all base nodes connected
+	std::vector<int> unconnected = GridType::checkConnectivity(baseGraph, baseNodes.size());
+    if (unconnected.empty())
+    {
+        return baseGraph;
+    }
+
+    // Turn list of unconnected node indexes to list of Nodes
+	std::vector<Point> unconnectedNodes;
+	for (int idx : unconnected) {
+		unconnectedNodes.push_back(baseNodes[idx]);
+	}
+
+    // Find the edges for those nodes
+	std::vector<Edge> connections = findNodeEdges(unconnectedNodes, infoGrid);
+
+    // Make an EdgeComparator set of all current edges
+    GridToGraph::EdgeComparator comp;
+    std::set<Edge, EdgeComparator> edgeSet(baseEdges.begin(), baseEdges.end(), comp);
+	for (const auto& e : connections)
+	{
+        if (edgeSet.find(e) == edgeSet.end())
+        {
+            edgeSet.insert(e);
+            baseEdges.push_back(e);
+        }
+	}
+
+	// Return the new graph with the new edges
+    return buildBaseGraph(baseEdges, baseNodes.size());
+}
+
 /////////////////////////////////////////////////////////////////////////////////////////
 
-void thickenPaths(Grid& grid)
+void expandPaths(Grid& grid)
 {
     int rows = grid.size();
     int cols = grid[0].size();
@@ -1082,8 +1102,9 @@ void thickenPaths(Grid& grid)
     // Initialize queue with all EDGE points from infoGrid
     for (int r = 0; r < rows; ++r) {
         for (int c = 0; c < cols; ++c) {
-            if (grid[r][c] & GridToGraph::EDGE) {  // Only EDGE points start BFS
-                queue.push({{r, c}, 0});
+			// Only EDGE points start BFS
+            if (grid[r][c] & GridToGraph::EDGE) {
+                queue.push({{c, r}, 0});
             }
         }
     }
@@ -1093,7 +1114,8 @@ void thickenPaths(Grid& grid)
         auto [pos, dist] = queue.front();
         queue.pop();
 
-        int r = pos.first, c = pos.second;
+        int c = pos.first;
+    	int r = pos.second;
 
         // Attempt to expand in all 8 directions
         for (const auto& [dc, dr] : directions) {
@@ -1105,7 +1127,7 @@ void thickenPaths(Grid& grid)
                 int newDist = dist + 1;
 
                 grid[nr][nc] = (newDist & 0xFFFF) | GridToGraph::XPND;
-                queue.push({{nr, nc}, newDist});
+                queue.push({{nc, nr}, newDist});
             }
         }
     }
@@ -1119,7 +1141,7 @@ double euclideanDistance(const Point& a, const Point& b) {
 
 // Finds the base node closest to the cluster center
 int findCentralNode(const AbstractNode& abstractNode, const std::vector<Point>& nodes) {
-	std::cerr << "FIND CENTRAL NODE: " << abstractNode.center.first << "," << abstractNode.center.second << " " << abstractNode.baseNodes.size() << " d:" << abstractNode.baseDeadEnds.size() << std::endl;
+	std::cerr << "FIND CENTRAL NODE: " << abstractNode.center.first << "," << abstractNode.center.second << " " << abstractNode.baseNodes.size() << std::endl;
     if (abstractNode.baseNodes.empty()) return -1;
 
     Point centroid = abstractNode.center;
@@ -1268,65 +1290,39 @@ static std::vector<int> dbscan(const std::vector<Point>& points, double eps, int
 // **Creates the Abstract Graph from clustered base nodes**
 std::vector<AbstractNode> createAbstractNodes(
     const std::vector<Point>& nodes,
-    const std::vector<Point>& deadEnds,
     const std::vector<Edge>& edges,
     double clusteringEps,
     int minClusterSize)
 {
-    // Combine nodes and deadEnds
-    std::vector<Point> allPoints = nodes;
-    //allPoints.insert(allPoints.end(), deadEnds.begin(), deadEnds.end());
-
     // Step 1: Cluster points
-    std::cerr << "In Nodes: " << nodes.size() << " dead:" << deadEnds.size() << " all:" << allPoints.size() << std::endl;
-    for (const auto& e : edges) {
-    	std::cerr << " Edge:" << e.from << "->" << e.to << (e.toDeadEnd ? " (DEAD)" : "");
-    	std::cerr << " " << nodes[e.from].first << "," << nodes[e.from].second << " -> ";
-    	if (e.toDeadEnd) {
-    		std::cerr << deadEnds[e.to].first << "," << deadEnds[e.to].second << " ";
-    	}
-    	else {
-    		std::cerr << nodes[e.to].first << "," << nodes[e.to].second;
-    	}
-    	std::cerr << std::endl;
-    }
-    std::vector<int> clusterLabels = dbscan(allPoints, clusteringEps, minClusterSize);
+    std::vector<int> clusterLabels = dbscan(nodes, clusteringEps, minClusterSize);
     for (int i=0; i < clusterLabels.size(); ++i) {
     	std::cerr << "  CLUSTER " << i << " => " << clusterLabels[i]<< std::endl;
     }
     // Step 2: Create Abstract Nodes
     std::unordered_map<int, AbstractNode> clusters;
-    for (size_t i = 0; i < allPoints.size(); ++i) {
+    for (size_t i = 0; i < nodes.size(); ++i) {
         int clusterId = clusterLabels[i];
 		// Skip noise points (outliers)
         if (clusterId < 0) {
-            std::cerr << "##SKIP CLUSTER for point: " << i << (i < nodes.size() ? "" : " (DEAD)") << std::endl;
 			continue;   
         }
 
         if (clusters.find(clusterId) == clusters.end()) {
-            clusters[clusterId] = {{}, {}, {0, 0}, -1};
+            clusters[clusterId] = {{}, {0, 0}, -1};
         }
 
-        if (i < nodes.size()) {
-            clusters[clusterId].baseNodes.push_back(static_cast<int>(i));
-        } else {
-            clusters[clusterId].baseDeadEnds.push_back(static_cast<int>(i - nodes.size()));
-        }
-
-        clusters[clusterId].center.first += allPoints[i].first;
-        clusters[clusterId].center.second += allPoints[i].second;
+        clusters[clusterId].baseNodes.push_back(static_cast<int>(i));
+        clusters[clusterId].center.first += nodes[i].first;
+        clusters[clusterId].center.second += nodes[i].second;
     }
 
 	// Calculate the center of each cluster
 	std::cerr << "CLUSTERS: " << clusters.size() << std::endl;
-    int ix = 0;
     for (auto& [i, cluster] : clusters) {
-        int totalPoints = cluster.baseNodes.size() + cluster.baseDeadEnds.size();
+        int totalPoints = cluster.baseNodes.size();
         cluster.center.first /= totalPoints;
         cluster.center.second /= totalPoints;
-        std::cerr << "  " << ix << " (" << i << ") => " << totalPoints << " in cluster" << std::endl;
-		++ix;
     }
     // Step 3: Collect abstract nodes into a vector
     std::vector<AbstractNode> abstractNodes;
@@ -1559,27 +1555,6 @@ PathCostMap computeAllPaths(const std::vector<Edge>& baseEdges, int numNodes)
 
 ////////////////////////////////////////////////////////
 
-BaseGraph generateBaseGraph(const std::vector<Edge>& baseEdges)
-{
-	BaseGraph baseGraph;
-    baseGraph.reserve(baseEdges.size()); // Reserve space for efficiency
-
-    for (const auto& edge : baseEdges) {
-        if (edge.toDeadEnd) continue;
-        int from = edge.from;
-        int to = edge.to;
-        int cost = edge.path.size(); // Use path length as edge cost
-
-        // Add edge in both directions (if undirected)
-        baseGraph[from].emplace_back(to, cost);
-        baseGraph[to].emplace_back(from, cost);
-        std::cerr << "BASE GRAPH: " << from << " -> " << to << " c: " << cost << std::endl;
-    }
-    return baseGraph;
-}
-
-////////////////////////////////////////////////////////
-
 FallbackGrid generateFallbackGrid(const Graph& graph)
 {
 	std::cerr << "################ GEN FBACK ############" << std::endl;
@@ -1669,18 +1644,21 @@ FallbackGrid generateFallbackGrid(const Graph& graph)
 
 ////////////////////////////////////////////////////////
 
-// Generates the Voronoi-like zones using path-based BFS
+//
+// Generates the Voronoi-like zones around each AbstractNode using path-based BFS
+// - Populates NavGrid with closest AbstractNode index and distance to it
+//
 std::vector<ZoneInfo> generateAbstractZones(NavGrid& navGrid,
     const Grid& grid,
+    const BaseGraph& baseGraph,
 	const std::vector<Edge>& baseEdges,
     const std::vector<AbstractNode>& abstractNodes)
 {
     int rows = grid.size();
     int cols = grid[0].size();
 
-	if (navGrid.empty()) {
-		navGrid = NavGrid(rows, std::vector<GridPointInfo>(cols));
-	}
+    // Create NavGrid. Note that GridPointInfo inis each field to appropriate value
+	navGrid = NavGrid(rows, std::vector<GridPointInfo>(cols));
 
     using QueueElement = std::tuple<int, int, int, double>; // (row, col, abstractNodeIdx, pathCost)
     std::queue<QueueElement> q;
@@ -1688,9 +1666,11 @@ std::vector<ZoneInfo> generateAbstractZones(NavGrid& navGrid,
     // Initialize BFS from each Abstract Node
     for (size_t i = 0; i < abstractNodes.size(); ++i) {
         Point nodePos = abstractNodes[i].center;
+		// Add abstract node to queue at dist 0
         q.push({ nodePos.first, nodePos.second, static_cast<int>(i), 0 });
+		// set the navgrid closes node to itself and dist to 0
         navGrid[nodePos.second][nodePos.first].closestAbstractNodeIdx = i;
-        navGrid[nodePos.second][nodePos.first].distanceToAbstractNode = 0.0;
+        navGrid[nodePos.second][nodePos.first].distanceToAbstractNode = 0;
     }
 
     // Multi-source path-based BFS
@@ -1698,18 +1678,21 @@ std::vector<ZoneInfo> generateAbstractZones(NavGrid& navGrid,
         auto [c, r, abstractIdx, cost] = q.front();
         q.pop();
 
+		// Check the neighbors of the cur zone cell
         for (const auto& [dc, dr] : directions) {
             int nc = c + dc;
             int nr = r + dr;
 
             if (grid[nr][nc]&WALL) continue;
 
+            // Expand cost of zone
             int newCost = cost + 1;
 
-            // Only update if we found a shorter path
-            if (navGrid[nr][nc].closestAbstractNodeIdx == -1 || newCost < navGrid[nr][nc].distanceToAbstractNode) {
+            // Only update if we found a shorter path (dist stats at MAX)
+            if (newCost < navGrid[nr][nc].distanceToAbstractNode) {
                 navGrid[nr][nc].closestAbstractNodeIdx = abstractIdx;
                 navGrid[nr][nc].distanceToAbstractNode = newCost;
+				// Add this cell to the queue for further expansion
                 q.emplace(nc, nr, abstractIdx, newCost);
             }
 
@@ -1717,58 +1700,69 @@ std::vector<ZoneInfo> generateAbstractZones(NavGrid& navGrid,
     }
     std::vector<ZoneInfo> zones(abstractNodes.size());
 
+    // If this edge crosses zones update the zone infos
 	auto addEdge = [baseEdges, navGrid](int edgeIdx, int curZone, std::vector<ZoneInfo>& zones) -> void {
 		Point from = baseEdges[edgeIdx].path.front();
 		Point to = baseEdges[edgeIdx].path.back();
 		int fromZone = navGrid[from.second][from.first].closestAbstractNodeIdx;
 		int toZone = navGrid[to.second][to.first].closestAbstractNodeIdx;
-		std::cerr << "   Add Edge to " << curZone
-			<< " baseEdge:" << edgeIdx << " " << baseEdges[edgeIdx].from << "->" << baseEdges[edgeIdx].to
-			<< " fzone:" << fromZone << " tzone:" << toZone << std::endl;
+        // If the edge crosses zones
 		if (fromZone != toZone) {
+			// The boundaryZone is the zone that is not the current zone
 			int boundaryZone = (fromZone == curZone) ? toZone : fromZone;
+			// Add the boundaryZone if not already in the adjacentZones list
 			if (std::find(zones[curZone].adjacentZones.begin(), zones[curZone].adjacentZones.end(), boundaryZone) == zones[curZone].adjacentZones.end()) {
 				zones[curZone].adjacentZones.push_back(boundaryZone);
 				zones[boundaryZone].adjacentZones.push_back(curZone);
-				std::cerr << "     Add Adjcen to " << curZone << " +" << boundaryZone << std::endl;
 			}
 		}
+		// Add the edge to the lit of edges for the the current zone
 		if (std::find(zones[curZone].baseEdgeIdxs.begin(), zones[curZone].baseEdgeIdxs.end(), edgeIdx) == zones[curZone].baseEdgeIdxs.end()) {
 			zones[curZone].baseEdgeIdxs.push_back(edgeIdx);
-			std::cerr << "   Add Edge to " << curZone << " +" << edgeIdx << std::endl;
 		}
-		};
+	};
 
+    // Skip boundary cells
 	for (int y = 1; y < rows-1; ++y) {
 		for (int x = 1; x < cols-1; ++x) {
-			int info = grid[y][x];
-			if (info & WALL) continue;
+			int cell = grid[y][x];
+			if (cell & WALL) continue;
 
             int curZone = navGrid[y][x].closestAbstractNodeIdx;
             int curBaseNode = abstractNodes[curZone].baseCenterNode;
 
-			int idx = info & 0xFFFF;
-            if (info & NODE) {
-                zones[curZone].baseNodes.push_back(idx);
-                std::cerr << "ZINFO: NODE: " << x << "," << y << " zone:" << curZone << " base:" << idx << std::endl;
-                // Corner case of 2 nodes next to each other so no EDGE cell to check
-                for (const auto& [dx, dy] : directions) {
-                    int nx = x + dx;
-                    int ny = y + dy;
-                    int dirInfo = grid[ny][nx];
-                    if (dirInfo == -1) continue;
-                    int otherIdx = dirInfo & 0xFFFF;
-                    if (info & NODE) {
-                        for (int edgeIdx = 0; edgeIdx < baseEdges.size(); ++edgeIdx) {
-                            if ((baseEdges[edgeIdx].from == idx && baseEdges[edgeIdx].to == otherIdx)
-                                || (baseEdges[edgeIdx].from == otherIdx && baseEdges[edgeIdx].to == idx)) {
-                                std::cerr << "## ADD EDGE: " << x << "," << y << " zone:" << curZone << " shortEdge: " << edgeIdx << " (" << idx << "<->" << otherIdx << ")" << std::endl;
-                                addEdge(edgeIdx, curZone, zones);
+			// Bottom bits of infoGrid are node or edge index
+			int idx = cell & 0xFFFF;
+
+			// If node then add to zone's list
+			if (cell & NODE) {
+				zones[curZone].baseNodes.push_back(idx);
+				// Corner case of 2 nodes next to each other so no EDGE cell to check
+				for (const auto& [dx, dy] : directions) {
+					int nx = x + dx;
+					int ny = y + dy;
+					int dirCell = grid[ny][nx];
+					if (dirCell & NODE) {
+						// index of the adjacent node
+						int otherIdx = dirCell & 0xFFFF;
+                        // Performance: Only check for shortEdge when at the smaller index node
+                        // Since nodes are adjacent and we will hit both nodes since checking every cell
+                        if (idx < otherIdx) {
+                            // Get the BaseGraphInfo for the other node
+                            const auto& edges = baseGraph.at(idx);
+                            for (const auto& bi : edges) {
+                                if (bi.neighbor == otherIdx) {
+                                    std::cerr << "## ADD EDGE: " << x << "," << y << " zone:" << curZone << " shortEdge: " << bi.edgeIndex << " (" << idx << "<->" << otherIdx << ")" << std::endl;
+                                    addEdge(bi.edgeIndex, curZone, zones);
+                                    break;
+                                }
                             }
                         }
-                    }
-                }
-            } else if (info & EDGE) {
+					}
+				}
+            }
+            // If it's an EDGE then add it
+			else if (cell & EDGE) {
 				if (baseEdges[idx].toDeadEnd) continue;
                 std::cerr << "## ADD EDGE: " << x << "," << y << " zone:" << curZone << " edge:" << idx << std::endl;
 				addEdge(idx, curZone, zones);
@@ -1864,50 +1858,67 @@ std::vector<std::pair<int, int>> computeShortestPath(
 // Main function to generate AbstractEdges
 void makeExtraAbstractEdges(const Graph& graph, std::vector<AbstractEdge>& abstractEdges)
 {
+	std::cerr << "## MAKE EXTRA ABSTRACT EDGES" << std::endl;
     // make current connections
 	std::unordered_map<std::pair<int, int>, bool, PairHash> connectedZones;
 	for (const auto& edge : graph.abstractEdges) {
 		connectedZones[{edge.from, edge.to}] = true;
 		connectedZones[{edge.to, edge.from}] = true;
-		std::cerr << "## CONNECTED ZONES: " << edge.from << " -> " << edge.to << std::endl;
 	}
+
+	// For each zone, check it's adjacent zones and add edges if not already connected
     std::vector<AbstractEdge> extraEdges;
 	for (int zoneA = 0; zoneA < graph.abstractNodes.size(); ++zoneA) {
 		const ZoneInfo& infoA = graph.zones[zoneA];
         for (int zoneB : infoA.adjacentZones) {
-			std::cerr << "## CHECK ZONE: a:" << zoneA << " b: " << zoneB << std::endl;
+			// Check already connected
             if (connectedZones.find({ static_cast<int>(zoneA), zoneB }) != connectedZones.end()) continue;
 
+            // Connect the two zones
             connectedZones[{zoneA, zoneB}] = true;
             connectedZones[{zoneB, zoneA}] = true;
+
 
             std::vector<AbstractNode> adjacentNodes;
             adjacentNodes.push_back(graph.abstractNodes[zoneA]);
             adjacentNodes.push_back(graph.abstractNodes[zoneB]);
 			std::vector<Edge> adjacentBaseEdges;
 			bool isPossible = false;
+            // check all the edges in the zone
             for (int baseIdx : infoA.baseEdgeIdxs) {
+				// For this edge get the from and to zones that they are closest to
                 Edge adjacentEdge = graph.baseEdges[baseIdx];
                 int toZone = graph.navGrid[adjacentEdge.path.back().second][adjacentEdge.path.back().first].closestAbstractNodeIdx;
                 int fromZone = graph.navGrid[adjacentEdge.path.front().second][adjacentEdge.path.front().first].closestAbstractNodeIdx;
+                std::cerr << "    baseIdx:" << baseIdx << " "  << adjacentEdge.from << "->" << adjacentEdge.to  << " p:" << adjacentEdge.path.size()
+                    << " front: "
+                    << adjacentEdge.path.front().first << "," << adjacentEdge.path.front().second
+                    << " back: "
+                    << adjacentEdge.path.back().first << "," << adjacentEdge.path.back().second
+            		<< " fromZ: " << fromZone << " toZ: " << toZone << std::endl;
+                // If both ends of the edge area closest to the current zone then just add edge to the list
                 if (toZone == fromZone)
                 {
                     adjacentBaseEdges.push_back(adjacentEdge);
                     std::cerr << "    Use internal zoneA edge " << adjacentEdge.from << "->" << adjacentEdge.to << std::endl;
                 }
+				// If one of the edges is closest to the other zone then add it to the list and remember we can get to other zone
                 else if ((toZone == zoneB) || (fromZone == zoneB)) {
                     adjacentBaseEdges.push_back(adjacentEdge);
                     std::cerr << "    Connector edge " << adjacentEdge.from << "->" << adjacentEdge.to << std::endl;
                     isPossible = true;
                 }
             }
+			// If none of the edges connect to the other zone then skip
             if (!isPossible) continue;
 
+            // We have at least one edge that connects the zones add all the internal edges of other zone to list
 			const ZoneInfo& infoB = graph.zones[zoneB];
             for (int baseIdx : infoB.baseEdgeIdxs) {
                 Edge adjacentEdge = graph.baseEdges[baseIdx];
                 int toZone = graph.navGrid[adjacentEdge.path.back().second][adjacentEdge.path.back().first].closestAbstractNodeIdx;
                 int fromZone = graph.navGrid[adjacentEdge.path.front().second][adjacentEdge.path.front().first].closestAbstractNodeIdx;
+				// An internal edge has both ends closest to the other zone
                 if (toZone == fromZone)
                 {
                     adjacentBaseEdges.push_back(adjacentEdge);
@@ -1917,11 +1928,12 @@ void makeExtraAbstractEdges(const Graph& graph, std::vector<AbstractEdge>& abstr
 
 			std::cerr << "###### ZONE: a:" << zoneA << " b: " << zoneB << " try find route: edges: " << adjacentBaseEdges.size() << std::endl;
 			std::vector<AbstractEdge> newEdges;
-			AbstractMST::generateMSTAbstractEdges(adjacentBaseEdges, graph.baseNodes, adjacentNodes, newEdges);
+			AbstractMST::generateMSTAbstractEdges(graph.baseGraph, graph.baseEdges, graph.baseNodes, adjacentNodes, newEdges);
             if (newEdges.size() > 1)
             {
 				std::cerr << "************** EEEEK ********** " << std::endl;
             }
+            std::cerr << "###### => GOT " << newEdges.size() << " extra edges" << std::endl;
 			for (const auto& newEdge : newEdges) {
                 const Edge& fromBase = adjacentBaseEdges[newEdge.from];
                 const Edge& toBase = adjacentBaseEdges[newEdge.to];
@@ -1938,196 +1950,82 @@ void makeExtraAbstractEdges(const Graph& graph, std::vector<AbstractEdge>& abstr
 	std::cerr << "EXTRA EDGES: " << extraEdges.size() << std::endl;
     abstractEdges.insert(abstractEdges.end(), extraEdges.begin(), extraEdges.end());
 }
-#if 0
-{
-	const std::vector<Point>& baseNodes = graph.baseNodes;
-	const std::vector<Edge>& baseEdges = graph.baseEdges;
-	const std::vector<AbstractNode>& abstractNodes = graph.abstractNodes;
-	const NavGrid& zoneGrid = graph.navGrid;
-
-    std::unordered_map<std::pair<int, int>, std::vector<std::pair<int, int>>, PairHash> storedPaths;
-
-    // Step 1: Store paths from baseEdges
-    for (const Edge& edge : baseEdges) {
-        std::pair<int, int> key = { std::min(edge.from, edge.to), std::max(edge.from, edge.to) };
-        storedPaths[key] = edge.path;
-    }
-
-    // Step 2: Construct abstract edges using stored paths or shortest paths
-    std::unordered_set<std::pair<int, int>, PairHash> addedEdges;
-
-    for (size_t i = 0; i < abstractNodes.size(); ++i) {
-        const AbstractNode& nodeA = abstractNodes[i];
-
-        for (size_t j = i + 1; j < abstractNodes.size(); ++j) {
-            const AbstractNode& nodeB = abstractNodes[j];
-
-            // Check if in adjacent zones (must share a boundary)
-            const auto& pntA = baseNodes[nodeA.baseCenterNode];
-            const auto& pntB = baseNodes[nodeB.baseCenterNode];
-			if (! areZonesAdjacent(graph, pntA, pntB)) {
-                continue;
-            }
-
-            std::pair<int, int> key = { static_cast<int>(i), static_cast<int>(j) };
-            auto [it, inserted] = addedEdges.insert(key);
-            if (!inserted) {
-                continue;
-            }
-
-            // If base edge exists, use its path
-            if (storedPaths.find(key) != storedPaths.end()) {
-                abstractEdges.push_back({ static_cast<int>(i), static_cast<int>(j), storedPaths[key] });
-                addedEdges.insert(key);
-                continue;
-            }
-
-            // Compute shortest path otherwise
-            std::vector<std::pair<int, int>> newPath = computeShortestPath( pntA, pntB, zoneGrid);
-            abstractEdges.push_back({ static_cast<int>(i), static_cast<int>(j), newPath });
-            addedEdges.insert(key);
-        }
-    }
-}
-#endif
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////
-#if 0
-void addAbstractEdges(
-    std::vector<AbstractEdge> abstractEdges,
-    const std::vector<AbstractNode>& abstractNodes,
-    const NavGrid& zoneGrid,
-    const std::vector<Point>& baseNodes,
-    const std::vector<Edge>& baseEdges)
-{
-    int gridWidth = zoneGrid[0].size();
-    int gridHeight = zoneGrid.size();
-
-    // Used to check if an edge already exists
-    std::unordered_set<std::pair<int, int>, PairHash> existingEdges;
-    for (const auto& edge : abstractEdges) {
-        existingEdges.insert(std::minmax(edge.from, edge.to));
-    }
-
-    // Precompute the best path lengths between BaseNodes
-    std::unordered_map<std::pair<int, int>, std::vector<std::pair<int, int>>, PairHash> shortestPaths;
-
-    for (const auto& edge : baseEdges) {
-		if (edge.toDeadEnd) continue;
-        shortestPaths[{edge.from, edge.to}] = edge.path;
-    }
-
-    // Directions for 4-way movement
-    std::vector<std::pair<int, int>> directions4 = {
-        {1, 0}, {-1, 0}, {0, 1}, {0, -1} };
-
-    for (int i = 0; i < abstractNodes.size(); ++i) {
-        std::pair<int, int> startNode = baseNodes[ abstractNodes[i].baseCenterNode ];
-        int startZone = i;
-
-        std::queue<std::pair<int, int>> queue;
-        std::unordered_set<std::pair<int, int>, PairHash> visited;
-        queue.push(startNode);
-        visited.insert(startNode);
-
-        while (!queue.empty()) {
-            std::pair<int, int> current = queue.front();
-            queue.pop();
-
-            for (const auto& [dx, dy] : directions4) {
-                Point next = { current.first + dx, current.second + dy };
-
-                // Skip walls and already visited cells
-                if (zoneGrid[next.second][next.first].closestAbstractNodeIdx == -1 || !visited.insert(next).second) {
-                    continue;
-                }
-
-                int nextZone = zoneGrid[next.second][next.first].closestAbstractNodeIdx;
-                if (nextZone == -1) continue;
-
-                if (nextZone != startZone) {
-                    // Check if an edge already exists
-                    auto edgeKey = std::minmax(startZone, nextZone);
-                    if (existingEdges.count(edgeKey)) continue;
-
-                    // Compute shortest path cost between these nodes
-                    int pathCost = std::numeric_limits<int>::max();
-                    std::vector<std::pair<int, int>> bestPath;
-
-                    if (shortestPaths.count({ startZone, nextZone })) {
-                        bestPath = shortestPaths[{startZone, nextZone}];
-                    }
-
-                    // Add new abstract edge
-                    abstractEdges.push_back({ static_cast<int>(i), nextZone,bestPath });
-                    existingEdges.insert(edgeKey);
-                }
-                else {
-                    // Continue BFS within the same zone
-                    queue.push(next);
-                }
-            }
-        }
-    }
-
-    return abstractEdges;
-}
-#endif
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 Graph makeGraph(const Grid& floorGrid)
 {
-	//
-	// Need to copy the floorGrid since ZSThinning removes floor
-	//
-	Graph graph;
-	graph.infoGrid = floorGrid;
-	{
-		auto tempGrid = graph.infoGrid;
+    //
+    // Need to copy the floorGrid since ZSThinning removes floor
+    //
+    Graph graph;
+    graph.infoGrid = floorGrid;
+    {
+        auto tempGrid = graph.infoGrid;
 
-		for (auto& r : tempGrid) {
-			for (auto& c : r) {
+        for (auto& r : tempGrid) {
+            for (auto& c : r) {
                 c = (c == EMPTY) ? WALL : EMPTY;
-			}
-		}
-		makeTGA("GRID_INPUT.tga", tempGrid);
-	}
+            }
+        }
+        makeTGA("GRID_INPUT.tga", tempGrid);
+    }
 
-	//
-	// Thin the floor down to a single path
-	//
+    //
+    // Thin the floor down to a single path
+    //
     Algo::ZSThinning(graph.infoGrid);
     extraThining(graph.infoGrid);
-	makeTGA("GRID_THIN.tga", graph.infoGrid, true);
+    makeTGA("GRID_THIN.tga", graph.infoGrid, true);
 
-	//
-	// Get the deadEnds and Nodes
-	//
-	graph.deadEnds = detectDeadEnds(graph.infoGrid);
-	graph.baseNodes = detectNodes(graph.infoGrid);
-	{
-		Grid tempGrid(graph.infoGrid.size(), std::vector<int>(graph.infoGrid[0].size(), EMPTY));
+    //
+    // Get the deadEnds and Nodes
+    //
+    graph.deadEnds = detectDeadEnds(graph.infoGrid);
+    graph.baseNodes = detectNodes(graph.infoGrid);
+    {
+        Grid tempGrid(graph.infoGrid.size(), std::vector<int>(graph.infoGrid[0].size(), EMPTY));
         for (int n = 0; n < graph.baseNodes.size(); ++n) {
             std::cerr << "## BASE NODE: base: " << n << " (";
-			int c = graph.baseNodes[n].first;
-			int r = graph.baseNodes[n].second;
+            int c = graph.baseNodes[n].first;
+            int r = graph.baseNodes[n].second;
             std::cerr << c << "," << r << ")" << std::endl;
-			tempGrid[r][c] = NODE;
-		}
-		makeTGA("GRID_NODES.tga", tempGrid);
-	}
+            tempGrid[r][c] = NODE;
+        }
+        makeTGA("GRID_NODES.tga", tempGrid);
+    }
 
-	//
-	// Set NODE and DEND in infoGrid and find Edges
-	//
-	markGridNodes(graph.infoGrid, graph.baseNodes, graph.deadEnds);
+    //
+    // Set NODE and DEND in infoGrid
+    //
+    markGridNodes(graph.infoGrid, graph.baseNodes, graph.deadEnds);
+
+    //
+    // Find all the BaseEdges connecting all the NODE and DENDs
+    //
 	graph.baseEdges = findEdges(graph.infoGrid, graph.baseNodes, graph.deadEnds);
+
+    //
+    // Unfortunately there are a few scenarios that dont connect. Basically
+	// some places aren't marked as nodes (some areas where "double/triple thick"
+	// This allows a path between A and B that bypasses C, but marks the
+	// path cells as visited, so C doesnt have a path of A or B e.g.
+	//
+	//    A--x---B    x isn't marked as a node
+	//       |        (real scenario is more messy)
+    //       C        So A->B cells visited => no paths from C
+    //
+    // To fix it have version of findEdges that just checks for paths from the
+    // list of nodes. Any new edges are added to the complete list
+	// 
+    graph.baseGraph = fixBaseEdges(graph.baseEdges, graph.infoGrid, graph.baseNodes);
+
+    //
+    // Mark the edges in the infoGrid and their index
+    //
 	markGridEdges(graph.infoGrid, graph.baseEdges);
     {
-        std::vector<int> uncon = { 0
-        };
-
+        std::vector<int> uncon = checkConnectivity(graph.baseGraph, graph.baseNodes.size());
 		Grid tempGrid(graph.infoGrid.size(), std::vector<int>(graph.infoGrid[0].size(), EMPTY));
         for (const auto& e : graph.baseEdges) {
             for (int i = 1; i < e.path.size() - 1; ++i) {
@@ -2147,13 +2045,18 @@ Graph makeGraph(const Grid& floorGrid)
 	}
 
 	//
-	// Restore Walls (since thinning make FLOOR = EMPTY, then expand Paths to fill EMPTY
+	// - Restore Walls (since thinning make FLOOR = EMPTY, then expand Paths to fill EMPTY
+    // - Mark the WALLs which are/ next to an empty cell with BOUNDARY
+    // - Expand out the paths to mark them as XPND
 	//
 	restoreWalls(graph.infoGrid, floorGrid);
 	markGridBoundaries(graph.infoGrid);
-	thickenPaths(graph.infoGrid);
+	expandPaths(graph.infoGrid);
 
-	graph.abstractNodes = createAbstractNodes(graph.baseNodes, graph.deadEnds, graph.baseEdges, 5.0, 2);
+    //
+    // Find the abstract Nodes
+	//
+	graph.abstractNodes = createAbstractNodes(graph.baseNodes, graph.baseEdges, 5.0, 2);
 	{
 		Grid tempGrid(graph.infoGrid.size(), std::vector<int>(graph.infoGrid[0].size(), EMPTY));
         for (const auto& e : graph.baseEdges) {
@@ -2189,8 +2092,10 @@ Graph makeGraph(const Grid& floorGrid)
 		makeTGA("GRID_ALL_NODES.tga", tempGrid);
 	}
 
+    //
     // Make Min Span Tree of abstract nodes to get abstract edges
-	AbstractMST::generateMSTAbstractEdges(graph.baseEdges, graph.baseNodes, graph.abstractNodes, graph.abstractEdges);
+    //
+	AbstractMST::generateMSTAbstractEdges(graph.baseGraph, graph.baseEdges, graph.baseNodes, graph.abstractNodes, graph.abstractEdges);
 	{
 		Grid tempGrid(graph.infoGrid.size(), std::vector<int>(graph.infoGrid[0].size(), EMPTY));
 		int idx=0;
@@ -2217,9 +2122,10 @@ Graph makeGraph(const Grid& floorGrid)
 		makeTGA("GRID_ABSTRACT.tga", tempGrid);
 	}
 
-	graph.baseGraph = generateBaseGraph(graph.baseEdges);
-	//XXXXXXXXX graph.navGrid = generateNavigationGrid(graph);
-	graph.zones = generateAbstractZones(graph.navGrid, graph.infoGrid, graph.baseEdges, graph.abstractNodes);
+    //
+    // Generate a zone for each abstract node
+    //
+	graph.zones = generateAbstractZones(graph.navGrid, graph.infoGrid, graph.baseGraph, graph.baseEdges, graph.abstractNodes);
 	{
 		std::vector<int> vals = {
 				GridToGraph::NODE,
@@ -2367,7 +2273,7 @@ void debugDump(const Graph& graph)
 	int idx=0;
 	for (const auto& node : graph.abstractNodes) {
 		std::cerr << " " << idx << " Center: (" << node.center.first << ", " << node.center.second << ")"
-				<< " dendsSz:" << node.baseDeadEnds.size() << " nodesSz: " << node.baseNodes.size()
+				<< " nodesSz: " << node.baseNodes.size()
 				<< " baseIdx:" << node.baseCenterNode << " ("
 				<< graph.baseNodes[node.baseCenterNode].first << "," << graph.baseNodes[node.baseCenterNode].second << ")"
 				<< std::endl;

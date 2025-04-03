@@ -15,7 +15,8 @@ public:
 	AbstractMST();
 	virtual ~AbstractMST();
 
-	static void generateMSTAbstractEdges(const std::vector<GridType::Edge>& edges,
+	static void generateMSTAbstractEdges(const GridType::BaseGraph& graph,
+			const std::vector<GridType::Edge>& edges,
 			const std::vector<GridType::Point>& baseNodes,
 			const std::vector<GridType::AbstractNode>& abstractNodes,
 			std::vector<GridType::AbstractEdge>& abstractEdges);

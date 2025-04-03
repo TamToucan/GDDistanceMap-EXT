@@ -46,11 +46,6 @@ struct ZoneInfo
 // 2D grid of information for each cell to aid navigation
 using NavGrid = std::vector<std::vector<GridPointInfo>>;
 
-//            |-----baseEdge-----|
-// Graph of Base nodes -> Base Node and Cost
-// The from->to and to->from is stored for each baseEdge
-using BaseGraph = std::unordered_map<int, std::vector<std::pair<int, int>>>;
-
 // Map of ALL BaseFromIdx,BaseToIdx pairs returning the total length of path
 // connecting node pair. i.e. the total length of all the paths to get from
 // the first node to the second node.
@@ -107,7 +102,7 @@ void updateGrid(GridType::Grid& grid, const std::vector<GridType::Point>& Nodes,
 // Note: grid 1=path, 2=node, 3=deadend
 std::vector<GridType::Path> findPaths(const GridType::Grid& grid);
 
-void thickenPaths(GridType::Grid& grid);
+void expandPaths(GridType::Grid& grid);
 
 AbstractGraph createAbstractGraph(const std::vector<GridType::Point>& nodes, const std::vector<GridType::Point>& deadEnds,
 								  const std::vector<Edge>& edges, double clusteringEps, int minClusterSize);
