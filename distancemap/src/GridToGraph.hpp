@@ -44,7 +44,15 @@ struct ZoneInfo
 };
 
 // 2D grid of information for each cell to aid navigation
-using NavGrid = std::vector<std::vector<GridPointInfo>>;
+using ZoneGrid = std::vector<std::vector<GridPointInfo>>;
+
+struct AbstractLevel
+{
+    std::vector<AbstractEdge> abstractEdges;
+    std::vector<AbstractNode> abstractNodes;
+    ZoneGrid zoneGrid;
+	std::vector<ZoneInfo> zones;
+};
 
 // Map of ALL BaseFromIdx,BaseToIdx pairs returning the total length of path
 // connecting node pair. i.e. the total length of all the paths to get from
@@ -58,20 +66,17 @@ struct FallbackCell {
 };
 using FallbackGrid = std::vector<std::vector<FallbackCell>>;
 
+
 struct Graph {
     GridType::Grid infoGrid;
-    NavGrid navGrid;
-	std::vector<ZoneInfo> zones;
-    std::unordered_map<int, std::unordered_set<int>> adjacentZones;
     FallbackGrid fallbackGrid;
     BaseGraph baseGraph;
     std::vector<FlowField::SparseFlowField> flowFields;
     PathCostMap pathCostMap;
     std::vector<Edge> baseEdges;
-    std::vector<AbstractEdge> abstractEdges;
     std::vector<GridType::Point> baseNodes;
-    std::vector<AbstractNode> abstractNodes;
     std::vector<GridType::Point> deadEnds;
+    std::vector<AbstractLevel> abstractLevels;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -83,7 +88,7 @@ Graph makeGraph(const GridType::Grid& floorGrid);
 //
 // Function to generate the navigation map
 //
-NavGrid generateNavigationGrid(
+ZoneGrid generateNavigationGrid(
     const GridType::Grid& grid,
     const std::vector<Edge>& baseEdges,
     const std::vector<AbstractEdge>& abstractEdges,
@@ -103,10 +108,6 @@ void updateGrid(GridType::Grid& grid, const std::vector<GridType::Point>& Nodes,
 std::vector<GridType::Path> findPaths(const GridType::Grid& grid);
 
 void expandPaths(GridType::Grid& grid);
-
-AbstractGraph createAbstractGraph(const std::vector<GridType::Point>& nodes, const std::vector<GridType::Point>& deadEnds,
-								  const std::vector<Edge>& edges, double clusteringEps, int minClusterSize);
-
 
 PathCostMap computeAllPaths(const std::vector<Edge>& baseEdges, int numNodes);
 

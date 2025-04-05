@@ -46,9 +46,6 @@ struct AbstractEdge {
     }
 };
 
-
-using AbstractGraph = std::pair<std::vector<AbstractNode>, std::vector<AbstractEdge>>;
-
 struct BaseGraphInfo {
     int neighbor;   // Neighboring base node index.
     int edgeIndex;  // Index into the edges vector.

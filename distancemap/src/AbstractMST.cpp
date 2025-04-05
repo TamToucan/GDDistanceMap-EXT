@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <unordered_map>
 
+#include "gdextension_interface.h"
 #include "GridTypes.hpp"
 
 using namespace GridType;
@@ -49,7 +50,6 @@ void runDijkstra(int startIdx, const BaseGraph& graph,
                  std::vector<std::pair<int, bool>>& usedEdge)
 {
     int numNodes = static_cast<int>(graph.size());
-	std::cerr << "  Dijkstra START node: " << startIdx << " for " << numNodes << " nodes" << std::endl;
     costs.assign(numNodes, std::numeric_limits<int>::max());
     prevNodes.assign(numNodes, -1);
     usedEdge.assign(numNodes, std::make_pair(-1, true));
@@ -132,7 +132,6 @@ void computeCandidateEdges(const BaseGraph& inBaseGraph,
     // For each abstract node as a source:
 	std::cerr << "##MST: computeCandidateEdges: " << numAbstractNodes << std::endl;
     for (int i = 0; i < numAbstractNodes; ++i) {
-		std::cerr << "MST: Process abstract node: " << i << std::endl;
         int startBase = abstractNodes[i].baseCenterNode;
         std::vector<int> costs;
         std::vector<int> prevNodes;
@@ -140,7 +139,6 @@ void computeCandidateEdges(const BaseGraph& inBaseGraph,
         runDijkstra(startBase, baseGraph, costs, prevNodes, usedEdge);
 
         // For every other abstract node j > i, record the candidate edge.
-		std::cerr << "  MST loop: " << i+1 << " << to " << numAbstractNodes-1 << std::endl;
         for (int j = i + 1; j < numAbstractNodes; ++j) {
             int targetBase = abstractNodes[j].baseCenterNode;
             if (costs[targetBase] == std::numeric_limits<int>::max())
@@ -150,15 +148,15 @@ void computeCandidateEdges(const BaseGraph& inBaseGraph,
             ce.to = j;
             ce.path = reconstructPath(startBase, targetBase, prevNodes, usedEdge, edges);
             candidates.push_back(ce);
-			std::cerr << "MST: CANDIDATE: " << i << "->" << j << " path: " << ce.path.size() << std::endl;
         }
     }
+	std::cerr << "   => " << candidates.size() << " candidates" << std::endl;
 }
 
 // Run Kruskal's algorithm on the candidate edges to build the MST over abstract nodes.
-void buildMST(const std::vector<AbstractEdge>& candidates, int numAbstractNodes,
-              std::vector<AbstractEdge>& mstEdges)
+std::vector<AbstractEdge> buildMST(const std::vector<AbstractEdge>& candidates, int numAbstractNodes)
 {
+    std::vector<AbstractEdge> mstEdges;
     // Start with all candidate edges and sort them by weight.
     std::vector<AbstractEdge> sortedEdges = candidates;
     std::sort(sortedEdges.begin(), sortedEdges.end(),
@@ -168,7 +166,6 @@ void buildMST(const std::vector<AbstractEdge>& candidates, int numAbstractNodes,
 
     // Use a union-find structure to detect cycles.
     UnionFind uf(numAbstractNodes);
-    mstEdges.clear();
 
 	std::cerr << "MST: BUILD from " << sortedEdges.size() << " candidates" << std::endl;
     for (const AbstractEdge& ce : sortedEdges) {
@@ -177,12 +174,13 @@ void buildMST(const std::vector<AbstractEdge>& candidates, int numAbstractNodes,
         if (setA != setB) {
             uf.unite(setA, setB);
             mstEdges.push_back(ce);
-			std::cerr << "   ADD MST EDGE: " << ce.from << "->" << ce.to << std::endl;
             // Stop if we have n-1 edges.
             if (mstEdges.size() == static_cast<size_t>(numAbstractNodes - 1))
                 break;
         }
     }
+	std::cerr << "   ADDed MST EDGEs: " << mstEdges.size() << std::endl;
+	return mstEdges;
 }
 
 //
@@ -218,15 +216,14 @@ std::vector<Edge> simplifyEdges(const std::vector<Edge> edges)
 #endif
 
 // The main function that computes the optimized set of AbstractEdges (MST) connecting all AbstractNodes.
-void AbstractMST::generateMSTAbstractEdges(const BaseGraph& graph,
+std::vector<AbstractEdge> AbstractMST::generateMSTAbstractEdges(const BaseGraph& graph,
 	const std::vector<Edge>& edges,
 	const std::vector<Point>& baseNodes,
-	const std::vector<AbstractNode>& abstractNodes,
-	std::vector<AbstractEdge>& abstractEdges)
+	const std::vector<AbstractNode>& abstractNodes)
 {
     std::vector<AbstractEdge> candidates;
 	std::cerr << "##MST: generateMSTAbstractEdges: for " << abstractNodes.size() << " abstract nodes" << std::endl;
     // std::vector<Edge> simpleEdges = simplifyEdges(edges);
     computeCandidateEdges(graph, edges, baseNodes, abstractNodes, candidates);
-    buildMST(candidates, static_cast<int>(abstractNodes.size()), abstractEdges);
+    return buildMST(candidates, static_cast<int>(abstractNodes.size()));
 }

@@ -141,12 +141,13 @@ SparseFlowField generateSparseFlowFieldForEdge(const GridType::Grid& grid,
 // Parallelized flow field generation
 void generateFlowFieldsParallel(const GridToGraph::Graph* graph, std::vector<SparseFlowField>& flowFields)
 {
-	int maxDistance = std::max(graph->infoGrid.size()-3, graph->infoGrid[0].size()-3);
-	int maxCost = maxDistance /4;
+	const int maxDistance = std::max(graph->infoGrid.size()-3, graph->infoGrid[0].size()-3);
+	const int maxCost = maxDistance /4;
+    const auto& ablv = graph->abstractLevels[0];
 
-	std::cerr << "############## MAKE PARALLEL: " << graph->abstractEdges.size() << std::endl;
+	std::cerr << "############## MAKE PARALLEL: " << ablv.abstractEdges.size() << std::endl;
     std::vector<std::future<void>> futures;
-    flowFields.resize(graph->abstractEdges.size());
+    flowFields.resize(ablv.abstractEdges.size());
 #if 0 // PARALLEL
     for (size_t i = 0; i < graph->abstractEdges.size(); ++i) {
     	std::cerr << "## EDGE: " << i << " path:" << graph->abstractEdges[i].path.size() << std::endl;
@@ -159,16 +160,16 @@ void generateFlowFieldsParallel(const GridToGraph::Graph* graph, std::vector<Spa
     	future.get();
     }
 #else
-    for (size_t i = 0; i < graph->abstractEdges.size(); ++i) {
+    for (size_t i = 0; i < ablv.abstractEdges.size(); ++i) {
     	std::cerr << "## ABEDGE: " << i
-    			<< " f:" << graph->abstractEdges[i].from
-				<< " (" << graph->baseNodes[ graph->abstractNodes[ graph->abstractEdges[i].from ].baseCenterNode ].first
-				<< " ," << graph->baseNodes[ graph->abstractNodes[ graph->abstractEdges[i].from ].baseCenterNode ].second << ")"
-    			<< " t:" << graph->abstractEdges[i].to
-				<< " (" << graph->baseNodes[ graph->abstractNodes[ graph->abstractEdges[i].to ].baseCenterNode ].first
-				<< " ," << graph->baseNodes[ graph->abstractNodes[ graph->abstractEdges[i].to ].baseCenterNode ].second << ")"
-				<< " pathSize:" << graph->abstractEdges[i].path.size() << std::endl;
-    	flowFields[i] = generateSparseFlowFieldForEdge(graph->infoGrid, graph->abstractEdges[i].path, maxCost, maxDistance);
+    			<< " f:" << ablv.abstractEdges[i].from
+				<< " (" << graph->baseNodes[ ablv.abstractNodes[ ablv.abstractEdges[i].from ].baseCenterNode ].first
+				<< " ," << graph->baseNodes[ ablv.abstractNodes[ ablv.abstractEdges[i].from ].baseCenterNode ].second << ")"
+    			<< " t:" << ablv.abstractEdges[i].to
+				<< " (" << graph->baseNodes[ ablv.abstractNodes[ ablv.abstractEdges[i].to ].baseCenterNode ].first
+				<< " ," << graph->baseNodes[ ablv.abstractNodes[ ablv.abstractEdges[i].to ].baseCenterNode ].second << ")"
+				<< " pathSize:" << ablv.abstractEdges[i].path.size() << std::endl;
+    	flowFields[i] = generateSparseFlowFieldForEdge(graph->infoGrid, ablv.abstractEdges[i].path, maxCost, maxDistance);
     }
 #endif
 }

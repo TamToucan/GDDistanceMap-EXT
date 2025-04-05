@@ -15,11 +15,10 @@ public:
 	AbstractMST();
 	virtual ~AbstractMST();
 
-	static void generateMSTAbstractEdges(const GridType::BaseGraph& graph,
-			const std::vector<GridType::Edge>& edges,
-			const std::vector<GridType::Point>& baseNodes,
-			const std::vector<GridType::AbstractNode>& abstractNodes,
-			std::vector<GridType::AbstractEdge>& abstractEdges);
+	static std::vector<GridType::AbstractEdge> generateMSTAbstractEdges(const GridType::BaseGraph& graph,
+		const std::vector<GridType::Edge>& edges,
+		const std::vector<GridType::Point>& baseNodes,
+		const std::vector<GridType::AbstractNode>& abstractNodes);
 };
 
 #endif /* DISTANCEMAP_SRC_ABSTRACTMST_H_ */

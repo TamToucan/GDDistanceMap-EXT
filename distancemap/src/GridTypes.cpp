@@ -69,7 +69,6 @@ BaseGraph buildBaseGraph(const std::vector<Edge>& edges, int numBaseNodes)
 		graph[e.from].push_back({ e.to, i, true, cost });
 		// Add edge in reverse direction.
 		graph[e.to].push_back({ e.from, i, false, cost });
-		std::cerr << "  EDGE FROM: " << e.from << "<->" << e.to << " cost:" << cost << std::endl;
 	}
 	return graph;
 }

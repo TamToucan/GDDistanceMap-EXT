@@ -161,24 +161,25 @@ double computeAngle(GridType::Point from, GridType::Point to) {
 // Function to get the next move as an angle
 double getNextMove(const GridToGraph::Graph& graph, const GridType::Point& source, const GridType::Point& target)
 {
-    const GridToGraph::GridPointInfo& sourceInfo = graph.navGrid[source.second][source.first];
-    const GridToGraph::GridPointInfo& targetInfo = graph.navGrid[target.second][target.first];
+	const auto& ablv = graph.abstractLevels[0];
+    const GridToGraph::GridPointInfo& sourceInfo = ablv.zoneGrid[source.second][source.first];
+    const GridToGraph::GridPointInfo& targetInfo = ablv.zoneGrid[target.second][target.first];
 	std::cerr << "]GETNEXTMOVE: "
 			<< "FRM abE idx: " << sourceInfo.closestAbstractEdgeIdx
-			<< " (abN " << graph.abstractEdges[sourceInfo.closestAbstractEdgeIdx].from << " ->"
-			<< " " << graph.abstractEdges[sourceInfo.closestAbstractEdgeIdx].to<< ")" << std::endl
+			<< " (abN " << ablv.abstractEdges[sourceInfo.closestAbstractEdgeIdx].from << " ->"
+			<< " " << ablv.abstractEdges[sourceInfo.closestAbstractEdgeIdx].to<< ")" << std::endl
 			<< " abN idx: " << sourceInfo.closestAbstractNodeIdx
-			<< " (bN: " << graph.abstractNodes[sourceInfo.closestAbstractNodeIdx].baseCenterNode
-			<< " " << graph.baseNodes[graph.abstractNodes[sourceInfo.closestAbstractNodeIdx].baseCenterNode].first
-			<< "," << graph.baseNodes[graph.abstractNodes[sourceInfo.closestAbstractNodeIdx].baseCenterNode].second << ")\n"
+			<< " (bN: " << ablv.abstractNodes[sourceInfo.closestAbstractNodeIdx].baseCenterNode
+			<< " " << graph.baseNodes[ablv.abstractNodes[sourceInfo.closestAbstractNodeIdx].baseCenterNode].first
+			<< "," << graph.baseNodes[ablv.abstractNodes[sourceInfo.closestAbstractNodeIdx].baseCenterNode].second << ")\n"
 
 			<< "TO abE idx: " << targetInfo.closestAbstractEdgeIdx
-			<< " (abN " << graph.abstractEdges[targetInfo.closestAbstractEdgeIdx].from << " ->"
-			<< " " << graph.abstractEdges[targetInfo.closestAbstractEdgeIdx].to<< ")" << std::endl
+			<< " (abN " << ablv.abstractEdges[targetInfo.closestAbstractEdgeIdx].from << " ->"
+			<< " " << ablv.abstractEdges[targetInfo.closestAbstractEdgeIdx].to<< ")" << std::endl
 			<< " abN idx: " << targetInfo.closestAbstractNodeIdx
-			<< " (bN: " << graph.abstractNodes[targetInfo.closestAbstractNodeIdx].baseCenterNode
-			<< " " << graph.baseNodes[graph.abstractNodes[targetInfo.closestAbstractNodeIdx].baseCenterNode].first
-			<< "," << graph.baseNodes[graph.abstractNodes[targetInfo.closestAbstractNodeIdx].baseCenterNode].second << ")"
+			<< " (bN: " << ablv.abstractNodes[targetInfo.closestAbstractNodeIdx].baseCenterNode
+			<< " " << graph.baseNodes[ablv.abstractNodes[targetInfo.closestAbstractNodeIdx].baseCenterNode].first
+			<< "," << graph.baseNodes[ablv.abstractNodes[targetInfo.closestAbstractNodeIdx].baseCenterNode].second << ")"
 			<< std::endl;
 
     // **1. Check if already at or adjacent to the target**
