@@ -3,8 +3,18 @@
 
 #include <vector>
 #include <utility>
+#include <limits>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace GridType {
+
+const int NODE = 0x010000;
+const int DEND = 0x020000;
+const int EDGE = 0x040000;
+const int XPND = 0x080000;
+const int BOUNDARY = 0x400000;
+const int WALL = 0x800000;
 
 struct PairHash {
     template <typename T1, typename T2>
@@ -18,11 +28,19 @@ using Point = std::pair<int, int>;
 using Path = std::vector<Point>;
 
     // Directions for 8 neighbouring cells
-const static std::vector<GridType::Point> directions = {
-		{0, -1}, {0, 1}, {-1, 0}, {1, 0}, // Up, Down, Left, Right
-		{-1, -1}, {1, -1}, {1, 1}, {-1, 1} // Diagonals
+const static std::vector<GridType::Point> directions8 = {
+	{0, -1}, {0, 1}, {-1, 0}, {1, 0}, // Up, Down, Left, Right
+	{-1, -1}, {1, -1}, {1, 1}, {-1, 1} // Diagonals
 };
 
+	// When going left->right, top->bottom, we only check 4 directions
+    // Directions: RIGHT, BOTTOM, BOTTOM_RIGHT, BOTTOM_LEFT
+const std::vector<std::pair<int, int>> searchDirs4 = {
+	{0, 1},   // Right
+	{1, 0},   // Bottom
+	{1, 1},   // Bottom-right
+	{1, -1},  // Bottom-left
+};
 
 struct Edge {
     int from, to;   // Indices of connected nodes or deadEnds
@@ -57,6 +75,35 @@ struct BaseGraphInfo {
 // Graph of Base nodes -> Base Node and EdgeIdx and Cost
 // The from->to and to->from is stored for each baseEdge
 using BaseGraph = std::vector< std::vector<BaseGraphInfo> >;
+
+struct GridPointInfo {
+    int closestBaseNodeIdx = -1;
+    int closestBaseEdgeIdx = -1;
+    int closestAbstractEdgeIdx = -1;
+    int closestAbstractNodeIdx = -1;
+    int distanceToAbstractNode = std::numeric_limits<int>::max();
+    int directionToFromNode = -1; // Index into the directions8 array
+    int directionToToNode = -1;   // Index into the directions8 array
+    double angleToFromNode = 0.0; // Granular angle to the "from" node in degrees
+    double angleToToNode = 0.0;   // Granular angle to the "to" node in degrees
+    bool hasFlowFieldCoverage = false; // If part of a FlowField
+};
+
+// Adjacent Zone Index => unique set of of boundary cells
+using BoundaryCells = std::unordered_set<GridType::Point, GridType::PairHash>;
+using BoundaryCellMap = std::unordered_map<int, BoundaryCells>;
+
+struct ZoneInfo
+{
+    std::vector<int> baseNodeIdxs; // List of sll the indexes of the base nodes in this zone
+	std::vector<int> baseEdgeIdxs; // List of all the indexes of the base edges in this zone
+	std::vector<int> adjacentZones; // List of all the indexes of the adjacent zones
+    BoundaryCellMap zoneBoundaryCellMap; // List of boundary cells for each neighbor zone can reach
+};
+
+// 2D grid of information for each cell to aid navigation
+using ZoneGrid = std::vector<std::vector<GridPointInfo>>;
+
 
 std::vector<int> checkConnectivity(const BaseGraph& graph, int numBaseNodes);
 

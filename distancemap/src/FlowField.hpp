@@ -15,16 +15,20 @@ namespace GridToGraph {
 
 namespace FlowField {
 
-// Flow field data packed as 32 bits: top 16 bits = cost, bottom 16 bits = direction index
-using FlowFieldData = uint32_t;
+	struct SubGrid {
+		std::vector<int> grid;  // Flat grid array to be used as the input for generateFlowFieldDial.
+		std::vector<uint16_t> costFlowField;
 
-struct SparseFlowField {
-    std::unordered_map<GridType::Point, FlowFieldData, GridType::PairHash> flowData;
-    // Returns
-    std::optional<std::pair<int, int>> unpack(const GridType::Point& point) const;
-};
+		int width;
+		int height;
+		int offsetX;  // Global x coordinate of the subgrid’s top-left cell.
+		int offsetY;  // Global y coordinate of the subgrid’s top-left cell.
+		bool isInside(int x, int y) const { return (x >= 0 && x < width && y >= 0 && y < height); }
+		// Using a flat index for arrays.
+		static inline int indexFor(int x, int y, int cols) { return y * cols + x; }
+	};
 
-void generateFlowFieldsParallel(const GridToGraph::Graph* graph, std::vector<SparseFlowField>& flowFields);
+void generateFlowGrids(GridToGraph::Graph& graph);
 
 }
 

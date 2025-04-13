@@ -370,6 +370,7 @@ void debugGridEdges(const Graph& graphs);
 void debugAbstractNodes(int pass, const AbstractLevel& ablv, const Graph& graph);
 void debugAbstractEdges(int pass, const AbstractLevel& ablv, const Graph& graph, const char* fname);
 void debugZones(int pass, const AbstractLevel& ablv, const Graph& graph);
+void debugZoneBoundaries(int pass, const AbstractLevel& ablv);
 
 void extraThining(Grid& grid) {
 	// Idea was to change non-thinned
@@ -575,7 +576,7 @@ void markGridNodes(Grid& grid, const std::vector<Point>& nodes, const std::vecto
 //
 // Set the Paths to the edge index
 //
-void markGridEdges(Grid& grid, const std::vector<Edge>& edges) {
+void markGridPaths(Grid& grid, const std::vector<Edge>& edges) {
 	int edgeIdx = GridToGraph::EDGE;
     for (const auto& e : edges) {
     	for (const auto& p : e.path) {
@@ -597,7 +598,7 @@ void markGridBoundaries(Grid& grid) {
         	// Find non walls
             if (! (grid[r][c]&WALL)) {
             	// Check all the neighbors for a wall
-            	for (const auto& [dc, dr] : GridType::directions) {
+            	for (const auto& [dc, dr] : GridType::searchDirs4) {
             		int nc = c + dc;
                     int nr = r + dr;
             		// All walls around a non-wall are boundary
@@ -890,7 +891,7 @@ Path followPath(int startX, int startY,
                 break;
             }
 
-            // Try directions again in HVD order from 'fwd'
+            // Try directions8 again in HVD order from 'fwd'
             bool foundNext = false;
             for (auto [dx2, dy2] : directionsHVD) {
                 int fx = fwd.first + dx2;
@@ -946,7 +947,7 @@ Path followPath(int startX, int startY,
 
             bool foundNext = false;
             for (auto [dx2, dy2] : directionsHVD) {
-            	// NOTE: subtract the dir to check dirs in opposite directions to forward
+            	// NOTE: subtract the dir to check dirs in opposite directions8 to forward
                 int bx = bck.first - dx2;
                 int by = bck.second - dy2;
                 if (grid[by][bx] == 0) continue; // empty
@@ -1120,8 +1121,8 @@ void expandPaths(Grid& grid)
         int c = pos.first;
     	int r = pos.second;
 
-        // Attempt to expand in all 8 directions
-        for (const auto& [dc, dr] : directions) {
+        // Attempt to expand in all 8 directions8
+        for (const auto& [dc, dr] : directions8) {
             int nc = c + dc;
             int nr = r + dr;
 
@@ -1349,7 +1350,7 @@ std::vector<AbstractNode> createAbstractNodes(
 
 ///////////////////////////////////////////////////////////////////////
 
-// Compute direction as an index into the directions array
+// Compute direction as an index into the directions8 array
 int computeDirection(const Point& from, const Point& to) {
     int dx = to.first - from.first;
     int dy = to.second - from.second;
@@ -1358,9 +1359,9 @@ int computeDirection(const Point& from, const Point& to) {
     dx = (dx == 0) ? 0 : (dx / std::abs(dx));
     dy = (dy == 0) ? 0 : (dy / std::abs(dy));
 
-    // Find the index in the directions array
-    for (size_t i = 0; i < directions.size(); ++i) {
-        if (directions[i].first == dx && directions[i].second == dy) {
+    // Find the index in the directions8 array
+    for (size_t i = 0; i < directions8.size(); ++i) {
+        if (directions8[i].first == dx && directions8[i].second == dy) {
             return i;
         }
     }
@@ -1374,9 +1375,8 @@ int computeDirection(const Point& from, const Point& to) {
 #if 0
 ZoneGrid generateNavigationGrid(const Graph& graph) {
 	return generateNavigationGrid(graph.infoGrid, graph.baseEdges, graph.abstractEdges,
-			graph.baseNodes, graph.abstractNodes);
+			graph.baseNodeIdxs, graph.abstractNodes);
 }
-#endif
 
 // Compute the granular angle between two points
 double computeAngle(const Point& from, const Point& to) {
@@ -1476,10 +1476,10 @@ ZoneGrid generateNavigationGrid(
             double distTo = std::hypot(current.first - baseTo.first, current.second - baseTo.second);
             navMap[r][c].closestAbstractNodeIdx = distFrom < distTo ? abNodeFromIdx : abNodeToIdx;
 
-            // Compute next step directions using abstract edge paths
+            // Compute next step directions8 using abstract edge paths
             const auto& abstractEdge = abstractEdges[closestAbstractEdgeIdx];
 
-            // Calculate directions and angles towards the "from" and "to" nodes of the abstract edge
+            // Calculate directions8 and angles towards the "from" and "to" nodes of the abstract edge
             Point fromNode = baseNodes[abstractNodes[abstractEdge.from].baseCenterNode];
             Point toNode = baseNodes[abstractNodes[abstractEdge.to].baseCenterNode];
 
@@ -1494,6 +1494,7 @@ ZoneGrid generateNavigationGrid(
 
     return navMap;
 }
+#endif
 
 //////////////////////////////////////////////////////////////////////
 
@@ -1550,94 +1551,6 @@ PathCostMap computeAllPaths(const std::vector<Edge>& baseEdges, int numNodes)
 
 ////////////////////////////////////////////////////////
 
-FallbackGrid generateFallbackGrid(const Graph& graph)
-{
-	std::cerr << "################ GEN FBACK ############" << std::endl;
-
-	FallbackGrid fallbackGrid(graph.infoGrid.size(), std::vector<FallbackCell>(graph.infoGrid[0].size()));
-	//
-	// Make a grid of all points covered by flowFields
-	//
-	Grid flowFieldCoverage(graph.infoGrid.size(), std::vector<int>(graph.infoGrid[0].size(), 0));
-	const int rows = flowFieldCoverage.size();
-	const int cols = flowFieldCoverage[0].size();
-	for (const auto& ff : graph.flowFields) {
-		for (const auto& fd : ff.flowData) {
-			const Point& pnt = fd.first;
-			flowFieldCoverage[pnt.second][pnt.first] = 1;
-		}
-	}
-
-	// Set the walls as "covered" (but use -1 to differentiate)
-	for (int y = 0; y < rows; ++y) {
-		for (int x = 0; x < cols; ++x) {
-			if (graph.infoGrid[y][x]&WALL) {
-				flowFieldCoverage[y][x] = -1;
-			}
-		}
-	}
-
-	std::cerr << std::endl;
-	for (int x = 0; x < cols; ++x) {
-		std::cerr << x%10;
-	}
-	std::cerr << std::endl;
-	for (int y = 0; y < rows; ++y) {
-		for (int x = 0; x < cols; ++x) {
-			if (flowFieldCoverage[y][x] > 0) {
-				std::cerr << "X";
-			} else if (flowFieldCoverage[y][x] < 0) {
-				std::cerr << "#";
-			}
-			else {
-				std::cerr << " ";
-			}
-		}
-		std::cerr << "  " << y << std::endl;
-	}
-	std::cerr << std::endl;
-
-    // Find boundary points (cells adjacent to flow fields)
-	std::queue<std::tuple<int, int, int, int>> queue; // {x, y, nextFlowX, nextFlowY
-    for (int r = 0; r < rows; ++r) {
-        for (int c = 0; c < cols; ++c) {
-            if (flowFieldCoverage[r][c] == 1) {  // Flow field covered point
-                for (const auto& [dc, dr] : directions) {
-                	int nc = c + dc;
-                    int nr = r + dr;
-
-                    if (flowFieldCoverage[nr][nc] == 0) {
-                        queue.emplace(nr, nc, r, c);  // Add to queue as boundary point
-                        fallbackGrid[nr][nc] = {r, c, 1};  // Distance = 1
-                    }
-                }
-            }
-        }
-    }
-
-	// Expand outward from boundary cells using BFS
-    while (!queue.empty()) {
-        auto [r, c, targetX, targetY] = queue.front();
-        queue.pop();
-
-        for (const auto& [dc, dr] : directions) {
-        	int nc = c + dc;
-            int nr = r + dr;
-
-            if (fallbackGrid[nr][nc].distance != -1 || flowFieldCoverage[nr][nc] != 0) {
-                continue;  // Skip walls & already processed points
-            }
-
-            // Assign new fallback cell
-            const FallbackCell& cell =fallbackGrid[r][c];
-            fallbackGrid[nr][nc] = {targetX, targetY, cell.distance+1};
-            queue.emplace(nr, nc, targetX, targetY);  // Expand further
-        }
-    }
-	return fallbackGrid;
-}
-
-////////////////////////////////////////////////////////
 
 //
 // Generates the Voronoi-like zones around each AbstractNode using path-based BFS
@@ -1674,7 +1587,7 @@ std::vector<ZoneInfo> generateAbstractZones(ZoneGrid& zoneGrid,
         q.pop();
 
 		// Check the neighbors of the cur zone cell
-        for (const auto& [dc, dr] : directions) {
+        for (const auto& [dc, dr] : directions8) {
             int nc = c + dc;
             int nr = r + dr;
 
@@ -1697,8 +1610,9 @@ std::vector<ZoneInfo> generateAbstractZones(ZoneGrid& zoneGrid,
 
     // If this edge crosses zones update the zone infos
 	auto addEdge = [baseEdges, zoneGrid](int edgeIdx, int curZone, std::vector<ZoneInfo>& zones) -> void {
-		Point from = baseEdges[edgeIdx].path.front();
-		Point to = baseEdges[edgeIdx].path.back();
+        const Edge& edge = baseEdges[edgeIdx];
+        GridType::Point from = edge.path.front();
+        GridType::Point to = edge.path.back();
 		int fromZone = zoneGrid[from.second][from.first].closestAbstractNodeIdx;
 		int toZone = zoneGrid[to.second][to.first].closestAbstractNodeIdx;
         // If the edge crosses zones
@@ -1711,13 +1625,13 @@ std::vector<ZoneInfo> generateAbstractZones(ZoneGrid& zoneGrid,
 				zones[boundaryZone].adjacentZones.push_back(curZone);
 			}
 		}
-		// Add the edge to the lit of edges for the the current zone
+		// Add the edge to the lit of edges for the current zone
 		if (std::find(zones[curZone].baseEdgeIdxs.begin(), zones[curZone].baseEdgeIdxs.end(), edgeIdx) == zones[curZone].baseEdgeIdxs.end()) {
 			zones[curZone].baseEdgeIdxs.push_back(edgeIdx);
 		}
 	};
 
-    // Skip boundary cells
+    // generate Nodes and boundaries
 	for (int y = 1; y < rows-1; ++y) {
 		for (int x = 1; x < cols-1; ++x) {
 			int cell = grid[y][x];
@@ -1729,14 +1643,16 @@ std::vector<ZoneInfo> generateAbstractZones(ZoneGrid& zoneGrid,
 			// Bottom bits of infoGrid are node or edge index
 			int idx = cell & 0xFFFF;
 
-			// If node then add to zone's list
+			// If node and/or new zone boundary then add to zone's list
 			if (cell & NODE) {
-				zones[curZone].baseNodes.push_back(idx);
+				zones[curZone].baseNodeIdxs.push_back(idx);
 				// Corner case of 2 nodes next to each other so no EDGE cell to check
-				for (const auto& [dx, dy] : directions) {
+				for (const auto& [dx, dy] : directions8) {
 					int nx = x + dx;
 					int ny = y + dy;
 					int dirCell = grid[ny][nx];
+					if (dirCell & WALL) continue;
+
 					if (dirCell & NODE) {
 						// index of the adjacent node
 						int otherIdx = dirCell & 0xFFFF;
@@ -1767,7 +1683,39 @@ std::vector<ZoneInfo> generateAbstractZones(ZoneGrid& zoneGrid,
 }
 
 ////////////////////////////////////////////////////////
-	
+
+void generateZoneBoundaries(AbstractLevel& abstractLevel)
+{
+	const ZoneGrid& zoneGrid = abstractLevel.zoneGrid;
+	std::vector<ZoneInfo>& zones = abstractLevel.zones;
+    int rows = zoneGrid.size();
+	int cols = zoneGrid[0].size();
+    for (int y = 1; y < rows - 1; ++y) {
+        for (int x = 1; x < cols - 1; ++x) {
+            int curZone = zoneGrid[y][x].closestAbstractNodeIdx;
+			if (curZone == -1) continue;
+
+			// Only need to 4 dirsT since scanning left->right, top->bottom
+            for (const auto& [dx, dy] : searchDirs4) {
+                int nx = x + dx;
+                int ny = y + dy;
+
+                int neighborZone = zoneGrid[ny][nx].closestAbstractNodeIdx;
+                if ((neighborZone != -1) && (neighborZone != curZone)) {
+
+                    // Add this cell to current zone's boundary map for neighborZone
+                    zones[curZone].zoneBoundaryCellMap[neighborZone].insert({ x, y });
+
+                    // Also add neighbor cell to neighbor zone's boundary map for currentZone
+                    zones[neighborZone].zoneBoundaryCellMap[curZone].insert({ nx, ny });
+
+					std::cerr << "  ZONE: " << curZone << " BOUNDARY: " << neighborZone
+						<< " cell: " << x << "," << y << " neighbor: " << nx << "," << ny << std::endl;
+                }
+            }
+        }
+    }
+}
 
 // Function to compute the shortest path using BFS (fallback when no direct BaseEdge exists)
 std::vector<std::pair<int, int>> computeShortestPath(
@@ -1790,7 +1738,7 @@ std::vector<std::pair<int, int>> computeShortestPath(
             return path; // Shortest path found
         }
 
-        for (const auto& [dx, dy] : directions) {
+        for (const auto& [dx, dy] : directions8) {
             std::pair<int, int> next = { current.first + dx, current.second + dy };
 
             if (zoneGrid[next.second][next.first].closestAbstractNodeIdx == -1 || visited.count(next)) {
@@ -1938,6 +1886,9 @@ std::vector<AbstractLevel> makeAbstractLevels(const Graph& graph)
 		ablv.zones = generateAbstractZones(ablv.zoneGrid, graph.infoGrid, graph.baseGraph, graph.baseEdges, ablv.abstractNodes);
 		debugZones(pass, ablv, graph);
 
+        generateZoneBoundaries(ablv);
+		debugZoneBoundaries(pass, ablv);
+
 		// Fix connections to AbstractNodes
 		//
 		std::cerr << "## MAKE EXTRA: " << pass << std::endl;
@@ -1990,7 +1941,6 @@ Graph makeGraph(const Grid& floorGrid)
     {
         Grid tempGrid(graph.infoGrid.size(), std::vector<int>(graph.infoGrid[0].size(), EMPTY));
         for (int n = 0; n < graph.baseNodes.size(); ++n) {
-            std::cerr << "## BASE NODE: base: " << n << " (";
             int c = graph.baseNodes[n].first;
             int r = graph.baseNodes[n].second;
             tempGrid[r][c] = NODE;
@@ -2026,7 +1976,7 @@ Graph makeGraph(const Grid& floorGrid)
     //
     // Mark the edges in the infoGrid and their index
     //
-	markGridEdges(graph.infoGrid, graph.baseEdges);
+	markGridPaths(graph.infoGrid, graph.baseEdges);
     debugGridEdges(graph);
 
 
@@ -2041,49 +1991,14 @@ Graph makeGraph(const Grid& floorGrid)
 
     //
 	// Generate the abstract levels with abstract nodes and edges, zones
+    //
     graph.abstractLevels = makeAbstractLevels(graph);
 
-	//
-	// Generate sparse flow fields for all the abstract edges
-	// and the fallback graph to use when no flow field
-	//
-    FlowField::generateFlowFieldsParallel(&graph, graph.flowFields);
-	{
-		std::vector<int> vals = {
-				GridToGraph::NODE,
-				GridToGraph::DEND,
-				(GridToGraph::XPND << 1),
-				(GridToGraph::XPND << 2),
-				GridToGraph::WALL,
-				GridToGraph::XPND,
-				GridToGraph::BOUNDARY | GridToGraph::WALL,
-				};
-
-        int cols = graph.infoGrid[0].size();
-        int rows = graph.infoGrid.size();
-        int ffNum = -1;
-		for (const auto ff : graph.flowFields) {
-            ++ffNum;
-            int val = vals[ffNum % vals.size()];
-			Grid tempGrid(rows, std::vector<int>(cols, EMPTY));
-			for (int row=0; row < graph.infoGrid.size(); ++row) {
-                for (int col = 0; col < graph.infoGrid[0].size(); ++col) {
-                    const auto& dirNcost = ff.unpack({ col, row });
-                    if (dirNcost) {
-                        tempGrid[row][col] = val;
-                    }
-                    else {
-                        tempGrid[row][col] = EMPTY;
-                    }
-                }
-			}
-            std::string fnam = "GRID_FF_" + std::to_string(ffNum) + ".tga";
-			makeTGA(fnam.c_str(), tempGrid);
-		}
-	}
-
-	graph.fallbackGrid = generateFallbackGrid(graph);
-
+    //
+    // Make the subgrid flow fields
+    //
+    FlowField::generateFlowGrids(graph);
+		
 	std::cerr << "==COMPUTE ALL PATHS" << std::endl;
 	graph.pathCostMap = computeAllPaths(graph.baseEdges, graph.baseNodes.size());
 	std::cerr << "==MADE GRAPH" << std::endl;
@@ -2188,7 +2103,7 @@ void debugZones(int pass, const AbstractLevel& ablv, const Graph& graph)
 			std::cerr << n << " ";
 		}
 		std::cerr << "         Nodes: ";
-		for (const auto& n : zi.baseNodes) {
+		for (const auto& n : zi.baseNodeIdxs) {
 			std::cerr << n << " ";
 		}
 		std::cerr << "         Edges: ";
@@ -2226,6 +2141,25 @@ void debugZones(int pass, const AbstractLevel& ablv, const Graph& graph)
 		}
 	}
 	makeTGA(makeDebugName(pass,"ZONES"), tempGrid);
+}
+
+void debugZoneBoundaries(int pass, const AbstractLevel& ablv)
+{
+	int cols = ablv.zoneGrid[0].size();
+	int rows = ablv.zoneGrid.size();
+	Grid tempGrid(rows, std::vector<int>(cols, EMPTY));
+    for (const auto& zone : ablv.zones) {
+        for (const auto& zoneBoundary : zone.zoneBoundaryCellMap) {
+            int curZone = zoneBoundary.first;
+            const auto& boundaryCells = zoneBoundary.second;
+            for (const auto& cell : boundaryCells) {
+                int c = cell.first;
+                int r = cell.second;
+                tempGrid[r][c] = WALL;
+            }
+        }
+    }
+	makeTGA(makeDebugName(pass,"BCELLS"), tempGrid);
 }
 
 void debugDump(const Graph& graph)
@@ -2488,110 +2422,6 @@ void debugDump(const Graph& graph)
 				}
 			}
 			std::cerr << " #" << std::endl;
-		}
-
-		std::cerr << "FLOW FIELDS (dir idx) " << std::endl;
-		int abEdge = 0;
-		for (const auto ff : graph.flowFields) {
-			std::cerr << "FOR ABEDGE: " << abEdge
-				<< " F:" << ablv.abstractEdges[abEdge].from << "(bNode " << ablv.abstractNodes[ablv.abstractEdges[abEdge].from].baseCenterNode << ")"
-				<< " T:" << ablv.abstractEdges[abEdge].to << "(bNode " << ablv.abstractNodes[ablv.abstractEdges[abEdge].to].baseCenterNode << ")"
-				<< " T:" << ablv.abstractEdges[abEdge].to
-				<< std::endl;
-			std::cerr << "   ";
-			++abEdge;
-			for (int col = 0; col < graph.infoGrid[0].size(); ++col) {
-				if (col > 9) std::cerr << col << " ";
-				else std::cerr << col << "  ";
-			}
-			std::cerr << std::endl;
-			for (int row = 0; row < graph.infoGrid.size(); ++row) {
-				if (row > 9) std::cerr << row << " ";
-				else std::cerr << row << "  ";
-				for (int col = 0; col < graph.infoGrid[0].size(); ++col) {
-					const auto& dirNcost = ff.unpack({ col, row });
-					if (dirNcost) {
-						std::cerr << dirNcost->first << "  ";
-					}
-					else {
-						std::cerr << "-- ";
-					}
-				}
-				std::cerr << std::endl;
-			}
-		}
-
-
-		std::cerr << "FALLBACK GRAPH " << std::endl;
-		for (int row = 0; row < graph.fallbackGrid.size(); ++row) {
-			for (int col = 0; col < graph.fallbackGrid[0].size(); ++col) {
-				const auto& cell = graph.fallbackGrid[row][col];
-				if (cell.distance != -1) {
-					std::cerr << std::showpos << cell.nextFlowX << "," << std::showpos << cell.nextFlowY << "  ";
-				}
-				else {
-					std::cerr << "     " << "  ";
-				}
-			}
-			std::cerr << std::endl;
-		}
-		std::cerr << std::noshowpos;
-		for (int col = 0; col < graph.fallbackGrid[0].size(); ++col) {
-			if (col % 10) {
-				std::cerr << "    ";
-			}
-			else {
-				std::cerr << " " << (col / 10) << "   ";
-			}
-		}
-		std::cerr << std::endl;
-		for (int col = 0; col < graph.infoGrid[0].size(); ++col) {
-			std::cerr << " " << (col % 10) << "   ";
-		}
-		std::cerr << std::endl;
-		for (int row = 0; row < graph.fallbackGrid.size(); ++row) {
-			for (int col = 0; col < graph.fallbackGrid[0].size(); ++col) {
-				const auto& cell = graph.fallbackGrid[row][col];
-				std::string chr = "    ";
-				int dx = cell.nextFlowX == col ? 0
-					: cell.nextFlowX > col ? 1
-					: -1;
-				int dy = cell.nextFlowY == row ? 0
-					: cell.nextFlowY > row ? 1
-					: -1;
-
-
-				if (cell.distance != -1) {
-					switch (dx) {
-					case -1: {
-						switch (dy) {
-						case -1: chr = " NW "; break;
-						case 0:  chr = " W  "; break;
-						case +1: chr = " SW "; break;
-						}
-					}
-						   break;
-					case 0: {
-						switch (dy) {
-						case -1: chr = " N  "; break;
-						case 0:  chr = " .. "; break;
-						case +1: chr = " S  "; break;
-						}
-					}
-						  break;
-					case +1: {
-						switch (dy) {
-						case -1: chr = " NE "; break;
-						case 0:  chr = " E  "; break;
-						case +1: chr = " SE "; break;
-						}
-						break;
-					}
-					}
-				}
-				std::cerr << chr;
-			}
-			std::cerr << " " << row << std::endl;
 		}
 
 		std::cerr << "WALLS" << std::endl;

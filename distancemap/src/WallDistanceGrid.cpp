@@ -77,7 +77,7 @@ SightGrid makeSightGrid(const GridType::Grid& grid)
     int rows = grid.size();
     int cols = grid[0].size();
 
-    // Initialize a 3D vector to store distances in 4 directions for each cell
+    // Initialize a 3D vector to store distances in 4 directions8 for each cell
     // distance[r][c][0 1 2 3] = North, East, South, West
     std::vector<std::vector<std::vector<int>>> distance(rows, std::vector<std::vector<int>>(cols, std::vector<int>(4, -1)));
 
