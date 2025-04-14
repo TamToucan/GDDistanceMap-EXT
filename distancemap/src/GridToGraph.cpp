@@ -1,3 +1,6 @@
+#include <fstream>
+#include <stdexcept>
+#include <chrono>
 #include <iostream>
 #include <vector>
 #include <stack>
@@ -365,6 +368,7 @@ inline bool isPath(int cellValue) {
 }
 
 
+void writeGridToFile(const std::vector<std::vector<int>>& grid, const std::string& filename);
 void debugDump(const Graph& graph);
 void debugGridEdges(const Graph& graphs);
 void debugAbstractNodes(int pass, const AbstractLevel& ablv, const Graph& graph);
@@ -1498,55 +1502,55 @@ ZoneGrid generateNavigationGrid(
 
 //////////////////////////////////////////////////////////////////////
 
-PathCostMap computeAllPaths(const std::vector<Edge>& baseEdges, int numNodes)
+#include <vector>
+#include <set>
+#include <omp.h>
+
+using namespace std;
+
+vector<vector<int>> computeAllPathDists(const vector<Edge>& baseEdges, int numNodes)
 {
-    // Create an adjacency list from the edges
-    std::vector<std::vector<std::pair<int, int>>> adjList(numNodes);
+    // Build adjacency list
+    vector<vector<pair<int, int>>> adjList(numNodes);
     for (const auto& edge : baseEdges) {
-        adjList[edge.from].emplace_back(edge.to, edge.path.size());
-        adjList[edge.to].emplace_back(edge.from, edge.path.size()); // Assuming undirected graph
+        int weight = edge.path.size();
+        adjList[edge.from].emplace_back(edge.to, weight);
+        adjList[edge.to].emplace_back(edge.from, weight);
     }
 
-    PathCostMap costs;
-    const int INF = std::numeric_limits<int>::max();
+    // Initialize distance matrix
+    const int INF = numeric_limits<int>::max();
+    vector<vector<int>> dist(numNodes, vector<int>(numNodes, INF));
 
-    // Run Dijkstra's algorithm for each node as the source
-    for (int start = 0; start < numNodes; ++start) {
-        // Distance vector initialized to infinity
-        std::vector<int> dist(numNodes, INF);
-        dist[start] = 0;
+	for (int start = 0; start < numNodes; ++start) {
+		vector<int> localDist(numNodes, INF);
+		localDist[start] = 0;
+		set<pair<int, int>> pq;
+		pq.insert({ 0, start });
 
-        // Min-heap priority queue: {distance, node}
-        std::priority_queue<std::pair<int, int>, std::vector<std::pair<int, int>>, std::greater<>> pq;
-        pq.push({0, start});
+		while (!pq.empty()) {
+			auto [currentDist, currentNode] = *pq.begin();
+			pq.erase(pq.begin());
+			if (currentDist > localDist[currentNode]) continue;
 
-        while (!pq.empty()) {
-            auto [currentDist, currentNode] = pq.top();
-            pq.pop();
+			for (const auto& [neighbor, weight] : adjList[currentNode]) {
+				int newDist = currentDist + weight;
+				if (newDist < localDist[neighbor]) {
+					if (localDist[neighbor] != INF) {
+						pq.erase({ localDist[neighbor], neighbor });
+					}
+					localDist[neighbor] = newDist;
+					pq.insert({ newDist, neighbor });
+				}
+			}
+		}
 
-            // If this distance is already outdated, skip it
-            if (currentDist > dist[currentNode]) {
-                continue;
-            }
+		for (int end = 0; end < numNodes; ++end) {
+			dist[start][end] = localDist[end];
+		}
+	}
 
-            // Explore neighbors
-            for (const auto& [neighbor, weight] : adjList[currentNode]) {
-                if (dist[currentNode] + weight < dist[neighbor]) {
-                    dist[neighbor] = dist[currentNode] + weight;
-                    pq.push({dist[neighbor], neighbor});
-                }
-            }
-        }
-
-        // Store results for this source node
-        for (int end = 0; end < numNodes; ++end) {
-            if (dist[end] != INF) {
-                costs[{start, end}] = dist[end];
-            }
-        }
-    }
-    std::cerr << "==MADE PATH COST MAP: " << costs.size() << std::endl;
-    return costs;
+    return dist;
 }
 
 ////////////////////////////////////////////////////////
@@ -1908,8 +1912,12 @@ std::vector<AbstractLevel> makeAbstractLevels(const Graph& graph)
 	return abstractLevels;
 }
 
-Graph makeGraph(const Grid& floorGrid)
+GD_API Graph makeGraph(const Grid& floorGrid)
 {
+	std::cout << "## MAKE GRAPH" << std::endl;
+	{
+        writeGridToFile(floorGrid, "GRID.txt");
+	}
     //
     // Need to copy the floorGrid since ZSThinning removes floor
     //
@@ -1979,7 +1987,6 @@ Graph makeGraph(const Grid& floorGrid)
 	markGridPaths(graph.infoGrid, graph.baseEdges);
     debugGridEdges(graph);
 
-
 	//
 	// - Restore Walls (since thinning make FLOOR = EMPTY, then expand Paths to fill EMPTY
     // - Mark the WALLs which are/ next to an empty cell with BOUNDARY
@@ -1992,16 +1999,21 @@ Graph makeGraph(const Grid& floorGrid)
     //
 	// Generate the abstract levels with abstract nodes and edges, zones
     //
+	std::cout << "===MAKE ABSTRACT" << std::endl;
     graph.abstractLevels = makeAbstractLevels(graph);
 
     //
     // Make the subgrid flow fields
     //
+	std::cout << "===MAKE FLOW" << std::endl;
     FlowField::generateFlowGrids(graph);
-		
-	std::cerr << "==COMPUTE ALL PATHS" << std::endl;
-	graph.pathCostMap = computeAllPaths(graph.baseEdges, graph.baseNodes.size());
-	std::cerr << "==MADE GRAPH" << std::endl;
+
+    //
+    //
+    //
+	std::cout << "==MAKE PATHS" << std::endl;
+	computeAllPathDists(graph.baseEdges, graph.baseNodes.size());
+	std::cout << "==MADE DISTS" << std::endl;
 
 	debugDump(graph);
 	return graph;
@@ -2445,6 +2457,50 @@ void debugDump(const Graph& graph)
 			std::cerr << " " << row << std::endl;
 		}
 	}
+}
+
+void writeGridToFile(const std::vector<std::vector<int>>& grid, const std::string& filename)
+{
+    std::ofstream outFile(filename);
+    if (!outFile) {
+        throw std::runtime_error("Could not open file for writing");
+    }
+
+    for (const auto& row : grid) {
+        for (int cell : row) {
+            outFile << (cell ? ' ' : '#');
+        }
+		outFile << std::endl;
+    }
+}
+
+GD_API std::vector<std::vector<int>> readGridFromFile(const std::string& filename)
+{
+    std::ifstream inFile(filename);
+    if (!inFile) {
+        throw std::runtime_error("Could not open file for reading");
+    }
+
+    std::vector<std::vector<int>> grid;
+    std::string line;
+
+    while (std::getline(inFile, line)) {
+        std::vector<int> row;
+        for (char c : line) {
+            if (c == '#') {
+                row.push_back(EMPTY);
+            }
+            else if (c == ' ') {
+                row.push_back(PATH);
+            }
+            // Note: other characters are ignored
+        }
+        if (!row.empty()) {
+            grid.push_back(row);
+        }
+    }
+
+    return grid;
 }
 
 } // namespace

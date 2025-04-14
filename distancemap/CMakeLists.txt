@@ -1,5 +1,21 @@
 project(GDDistanceMap)
-    
+
+if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_HOST_WIN32)
+        set(MINGW TRUE)
+        message(STATUS "MinGW detected: ${CMAKE_CXX_COMPILER}")
+endif()
+
+# Windows-specific settings
+if(WIN32)
+    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)  # Simplifies DLL exports
+    add_compile_definitions(GDDISTANCEMAP_EXPORTS)  # For manual export control
+endif()
+
+if(MSVC)
+    set(CMAKE_EXE_LINKER_FLAGS_DEBUG "${CMAKE_EXE_LINKER_FLAGS_DEBUG} /DEBUG:FULL")
+    set(CMAKE_SHARED_LINKER_FLAGS_DEBUG "${CMAKE_SHARED_LINKER_FLAGS_DEBUG} /DEBUG:FULL")
+endif()
+
 # Automatically pick up files added to src
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
         "${CMAKE_CURRENT_SOURCE_DIR}/src/*.h"
@@ -16,6 +32,18 @@ ENDIF(CMAKE_BUILD_TYPE MATCHES RELEASE)
 
 add_library(${LIB_NAME} SHARED ${SOURCES})
 
+# MSVC-specific settings AFTER target creation
+if(MSVC)
+    target_compile_options(${LIB_NAME} PRIVATE /Zi /Od)
+    target_link_options(${LIB_NAME} PRIVATE /DEBUG)
+    set_target_properties(${LIB_NAME} PROPERTIES
+        PDB_NAME "${LIB_NAME}"
+        PDB_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+        COMPILE_PDB_NAME "${LIB_NAME}"
+        COMPILE_PDB_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    )
+endif()
+
 target_include_directories(${LIB_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src"
 					                   PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/inc"
 					                   PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/lib/Util"
@@ -30,6 +58,19 @@ target_link_libraries(${LIB_NAME}
 	PUBLIC godot::cpp)
 
 target_include_directories(${LIB_NAME} PRIVATE -isystem ${FETCHCONTENT_BASE_DIR})
+
+add_executable(testMain "${CMAKE_CURRENT_SOURCE_DIR}/test/testMain.cpp")
+target_link_libraries(testMain PRIVATE ${LIB_NAME})
+target_include_directories(testMain PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/src")
+
+if(MSVC)
+    target_compile_options(testMain PRIVATE /Zi /Od)
+    target_link_options(testMain PRIVATE /DEBUG)
+elseif(MINGW)
+    target_compile_options(${LIB_NAME} PRIVATE -g -O0 -gdwarf-4 -gstrict-dwarf)
+    target_link_options(${LIB_NAME} PRIVATE -g -Wl,--export-all-symbols)
+endif()
 
 add_custom_command(
         TARGET ${LIB_NAME}  POST_BUILD

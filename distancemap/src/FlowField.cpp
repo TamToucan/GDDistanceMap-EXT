@@ -240,8 +240,6 @@ std::vector<uint16_t> precomputeBoundaryDF(const GridType::BoundaryCells& cells,
 
 void generateFlowGrids(GridToGraph::Graph& graph)
 {
-	std::cout << "#==============# GENERATE FLOW GRIDS" << std::endl;
-
 	const int rows = graph.infoGrid.size();
 	const int cols = graph.infoGrid[0].size();
 

@@ -8,6 +8,16 @@
 #include "FlowField.hpp"
 #include "GridTypes.hpp"
 
+#ifdef _WIN32
+#ifdef GDDISTANCEMAP_EXPORTS  // Must match your project name
+#define GD_API __declspec(dllexport)
+#else
+#define GD_API __declspec(dllimport)
+#endif
+#else
+#define GD_API
+#endif
+
 //
 // Take the 2D grid of EMPTY/PATH (i.e. 1 = floor, 0 = wall) and
 // generate the thinned (1 pixel) 2D grid from that. This gives
@@ -58,6 +68,8 @@
 
 namespace GridToGraph {
 
+GD_API std::vector<std::vector<int>> readGridFromFile(const std::string& filename);
+
 using namespace GridType;
 
 // For INPUT GRID
@@ -107,7 +119,7 @@ struct Graph {
 //
 // Floor must = PATH on input i.e. walkable, WALLS = EMPTY
 //
-Graph makeGraph(const GridType::Grid& floorGrid);
+GD_API Graph makeGraph(const GridType::Grid& floorGrid);
 
 std::vector<GridType::Point> detectDeadEnds(const GridType::Grid& grid);
 
