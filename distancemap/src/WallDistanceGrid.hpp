@@ -12,7 +12,7 @@ namespace DistanceMap {
 // Distance grid is a new grid the size of the input which has
 // distance to the nearest wall (So 0 if it is a wall)
 //
-std::vector<std::vector<int>> makeWallDistanceGrid(const std::vector<std::vector<int>>& grid);
+std::vector<std::vector<int>> makeWallDistanceGrid(const GridType::Grid& grid);
 
 // A grid where each entry is a packed dist can see before Wall
 struct SightGrid {

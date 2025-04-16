@@ -4,6 +4,7 @@
 #include <vector>
 #include <utility>
 #include <limits>
+#include <cstdint>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -77,16 +78,8 @@ struct BaseGraphInfo {
 using BaseGraph = std::vector< std::vector<BaseGraphInfo> >;
 
 struct GridPointInfo {
-    int closestBaseNodeIdx = -1;
-    int closestBaseEdgeIdx = -1;
-    int closestAbstractEdgeIdx = -1;
-    int closestAbstractNodeIdx = -1;
-    int distanceToAbstractNode = std::numeric_limits<int>::max();
-    int directionToFromNode = -1; // Index into the directions8 array
-    int directionToToNode = -1;   // Index into the directions8 array
-    double angleToFromNode = 0.0; // Granular angle to the "from" node in degrees
-    double angleToToNode = 0.0;   // Granular angle to the "to" node in degrees
-    bool hasFlowFieldCoverage = false; // If part of a FlowField
+    int16_t closestAbstractNodeIdx = -1;
+    int16_t distanceToAbstractNode = std::numeric_limits<short int>::max();
 };
 
 // Adjacent Zone Index => unique set of of boundary cells

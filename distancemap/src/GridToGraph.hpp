@@ -129,22 +129,6 @@ struct Graph {
 //
 GD_API Graph makeGraph(const GridType::Grid& floorGrid);
 
-std::vector<GridType::Point> detectDeadEnds(const GridType::Grid& grid);
-
-std::vector<GridType::Point> detectNodes(const GridType::Grid& grid);
-
-std::vector<Edge> findEdges(const GridType::Grid& grid, const std::vector<GridType::Point>& nodes, const std::vector<GridType::Point>& deadEnds);
-
-// Note: grid changed 2 = node, 3 = deadend after calling this
-void updateGrid(GridType::Grid& grid, const std::vector<GridType::Point>& Nodes, const std::vector<GridType::Point>& DeadEnds);
-
-// Note: grid 1=path, 2=node, 3=deadend
-std::vector<GridType::Path> findPaths(const GridType::Grid& grid);
-
-void expandPaths(GridType::Grid& grid);
-
-PathCostMap computeAllPaths(const std::vector<Edge>& baseEdges, int numNodes);
-
 }
 
 #endif /* DISTANCEMAP_SRC_GRIDTOGRAPH_HPP_ */

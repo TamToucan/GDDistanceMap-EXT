@@ -2364,21 +2364,6 @@ void debugDump(const Graph& graph)
 
 			toggle = true;
 
-			for (int col = 0; col < graph.infoGrid[0].size(); ++col) {
-				if (graph.infoGrid[row][col] & WALL) {
-					std::cerr << "---- ";
-				}
-				else {
-					const auto& info = ablv.zoneGrid[row][col];
-					if (info.closestBaseNodeIdx >= 10) {
-						std::cerr << info.closestAbstractNodeIdx << "/" << info.closestBaseNodeIdx << " ";
-					}
-					else {
-						std::cerr << info.closestAbstractNodeIdx << "/" << info.closestBaseNodeIdx << "  ";
-					}
-				}
-			}
-			std::cerr << " #" << std::endl;
 			++row;
 		}
 
