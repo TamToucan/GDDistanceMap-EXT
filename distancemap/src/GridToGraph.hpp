@@ -64,6 +64,14 @@
 // #       #            #
 // ######################
 //
+// For each Zone in a level (e.g. 3 above) I then create a SubGrid
+// which has the min enclosing rectangle and it's position in the
+// level's infoGrid.
+// The subgrid.grid rectangle simply has WALL or 0 depending on whether it
+// belongs to the zone or not (zones are any shape remember).
+// Finally, and most importantly it creates a costFlowField for EACH neighbor
+// zone than can be reached.
+// So Zone3 subgrid would have 1 costFlowField
 //
 
 namespace GridToGraph {

@@ -1,3 +1,5 @@
+#include <sstream>
+#include <fstream>
 #include <vector>
 #include <unordered_map>
 #include <optional>
@@ -16,6 +18,8 @@
 #include "GridToGraph.hpp"
 
 namespace FlowField {
+void debugFlow(int lev, int curZone, int adjacentZone, SubGrid subGrid);
+
 	// Maximum cost (our cost type is uint8_t, so 255 is max).
 	constexpr uint8_t MAX_COST = 255;
 	constexpr uint8_t NO_DIR = 127;
@@ -113,128 +117,69 @@ std::vector<std::pair<int, int>> convertSinksToLocal(const GridType::BoundaryCel
 	return localSinks;
 }
 
+//#########################################################################################
 
-	// ---------------------------------------------------------------------------
-	// generateFlowFieldDial()
-	// grid: a flat vector for grid, row-major, where each cell is an int (WALL bit mask)
-	// sinks: list of sink cells (boundary cells) as pairs of (x, y)
-	// costField and dirField: flat arrays of size rows*cols that will be written to.
-	// rows, cols: dimensions of the grid.
-	// isWalkable: lambda function taking (x,y) and grid, returns true for non-wall cells.
-template <typename WalkableFn>
-std::vector<uint16_t> generateFlowFieldDial(const std::vector<int>& grid,
-		const std::vector<std::pair<int, int>>& sinks,
-		int rows, int cols,
-		WalkableFn isWalkable)
+std::vector<uint16_t> generateFlowFieldDial(const SubGrid& subGrid, const std::vector<std::pair<int, int>>& sinks)
 {
-	// Total number of cells.
+	const std::vector<int>& grid = subGrid.grid;
+	int rows = subGrid.height;
+	int cols = subGrid.width;
+	// Allocate flat flow field; each cell's value is stored as:
+	//   (cost << 8) | direction, where cost is in [0, MAX_COST] and direction in [0,7]
+	// Initialize to MAX_COST and NO_DIR.
 	const int cellCount = rows * cols;
-	std::vector<uint16_t> costFlowField;
-	costFlowField.assign(cellCount, MAX_COST<<8 | NO_DIR);
+	std::vector<uint16_t> costFlowField(cellCount, (MAX_COST << 8) | NO_DIR);
 
-	// Buckets: one bucket per possible cost value from 0 up to MAX_COST.
-	// We store indices (flat indices for cells) in each bucket.
-	std::vector<int> buckets;
-	std::vector<int> bucket_offsets(MAX_COST + 2);
+	// Create buckets: one bucket per cost value from 0 to MAX_COST.
+	// Each bucket is a vector of flat indices (cells with that cost).
+	std::vector<std::vector<int>> buckets(MAX_COST + 1);
 
-	// Count sink positions per bucket (bucket 0 only)
-	bucket_offsets[1] = sinks.size(); // All sinks go to bucket 0
-
-	// Build flat buckets
-	buckets.reserve(sinks.size());
-	for (const auto& [x, y] : sinks) {
+	// Initialize sink cells.
+	for (const auto& sink : sinks) {
+		int x = sink.first;
+		int y = sink.second;
 		int idx = SubGrid::indexFor(x, y, cols);
-		buckets.push_back(idx);
-		costFlowField[idx] = 0 | NO_DIR | SINK_BIT;
+		costFlowField[idx] = 0 | NO_DIR;  // cost 0, no direction (or mark as sink if needed)
+		buckets[0].push_back(idx);
 	}
-	int sinksToGo = sinks.size();
 
-	std::cerr << "DIAL: " << cols << "x" << rows << " sinks:" << sinks.size() << std::endl;
-	// Dial's algorithm: process each bucket, in increasing cost order.
-	for (uint8_t cost = 0; cost <= MAX_COST && sinksToGo; ++cost) {
-		const int start = bucket_offsets[cost];
-		const int end = bucket_offsets[cost + 1];
-
-		for (int i = start; i < end; ++i) {
-			int curIdx = buckets[i];
-			std::cerr << "  Bucket[cost:" << static_cast<int>(cost) << "] => "<< curIdx << std::endl;
-
+	// Dial's algorithm: iterate cost by cost.
+	for (uint8_t cost = 0; cost <= MAX_COST && !buckets[cost].empty(); ++cost) {
+		std::cerr << "COST: " << (int)cost << " bucket = " << buckets[cost].size() << std::endl;
+		// Process all cells in the current cost bucket.
+		for (int curIdx : buckets[cost]) {
+			// Decode current cell's coordinates.
 			int x = curIdx % cols;
 			int y = curIdx / cols;
-			if (costFlowField[curIdx]&SINK_BIT) {
-				--sinksToGo;
-				std::cerr << "  DONE SINK: " << x << "," << y << " toGo: " << sinksToGo << std::endl;
-			}
+			uint8_t newCost = cost + STEP_COST;
 
-			std::cerr << "  cost:" << static_cast<int>(cost) << " xy:" << x << "," << y << " idx:" << curIdx << std::endl;
-			// Explore the 8 neighbors
+			// For each of the 8 neighbors.
 			for (int d = 0; d < 8; ++d) {
 				int nx = x + dx[d];
 				int ny = y + dy[d];
+				// Check bounds 
+				if (!subGrid.isInside(nx, ny)) continue;
 
-				// Check walkability: any non-wall cell is walkable.
-				if (!isWalkable(nx, ny, grid)) continue;
+				// Check wall
 				int nIdx = SubGrid::indexFor(nx, ny, cols);
+				if (grid[nIdx] & GridType::WALL) continue;
 
-				std::cerr << "    walkable:" << nx << "," << ny << " cost:" << static_cast<int>(cost) << " curCost:" << (costFlowField[nIdx] >> 8) << std::endl;
-				// New cost is current cost + STEP_COST.
-				uint8_t newCost = cost + STEP_COST;
-				// If new cost is better than the neighbor's cost, update it.
-				if (newCost < costFlowField[nIdx]>>8) {
-					// Store the direction that would bring this neighbor closer to a sink.
-					// We store the reverse direction (the direction from neighbor back to the current cell)
-					// so that following the vector will lead from any cell toward one of the sinks.
-					// (d + 4) % 8 gives the opposite direction.
-					costFlowField[nIdx] = newCost << 8 | ((d + 4) % 8);
+				uint8_t neighborCost = costFlowField[nIdx] >> 8;
 
-					std::cerr << "      store costDir: " << std::hex << costFlowField[nIdx] << std::dec << std::endl;
-
-					// Only insert if we haven't exceeded MAX_COST.
-					if (newCost <= MAX_COST) {
-						buckets.push_back(nIdx);
-						bucket_offsets[newCost + 1]++; // Expand next bucket
-					}
+				// If we found a shorter path to the neighbor.
+				if (newCost < neighborCost) {
+					// Store the new cost and the direction.
+					// Here we store the reverse direction:
+					// When moving from neighbor to current cell,
+					// the opposite of d is (d + 4) % 8.
+					costFlowField[nIdx] = (newCost << 8) | ((d + 4) % 8);
+					buckets[newCost].push_back(nIdx);
 				}
 			}
 		}
 	}
 	return costFlowField;
 }
-
-#if 0
-std::vector<uint16_t> precomputeBoundaryDF(const GridType::BoundaryCells& cells, const SubGrid& subGrid)
-{
-	std::vector<uint16_t> costFlowField;
-
-	std::queue<std::tuple<int, int, uint8_t>> q;
-	costFlowField.assign(subGrid.width*subGrid.height, MAX_COST<<8 | NO_DIR);
-	for (auto [x, y] : cells) {
-		int idx = SubGrid::indexFor(x, y, subGrid.width);
-		costFlowField[idx] = (NO_DIR << 8) | 0; // 0 distance at boundary
-		q.push({ x, y, 0 });
-	}
-
-	while (!q.empty()) {
-		auto [x, y, dist] = q.front(); q.pop();
-		for (int d = 0; d < 8; ++d) {
-			int nx = x + dx[d];
-			int ny = y + dy[d];
-			if (!subGrid.isInside(nx, ny)) continue;
-
-			int nIdx = SubGrid::indexFor(nx, ny, subGrid.width);
-			int newDist = dist + 1;
-			int oldDist = costFlowField[nIdx] >> 8;
-			if (newDist < oldDist) {
-				costFlowField[nIdx] = newDist<<8 | d;
-				q.push({ nx, ny, newDist });
-			}
-		}
-	}
-	return costFlowField;
-}
-
-#endif
-
 
 //#########################################################################################
 
@@ -255,32 +200,7 @@ void generateFlowGrids(GridToGraph::Graph& graph)
 	}
 
 	std::cerr << "## FLOW: AbstractLevels: " << graph.abstractLevels.size() << std::endl;
-	int levIdx = 0;
-#if 0
-	const int fullSubGridStart = 0; // (graph.abstractLevels.size() + 1) / 2;
-	while (levIdx != fullSubGridStart)
-	{
-		auto& ablv = graph.abstractLevels[levIdx];
-		for (int zi = 0; zi < ablv.zones.size(); ++zi) {
-			auto& subGrid = ablv.subGrids[zi];
-			const auto& adjZones = ablv.zones[zi].adjacentZones;
-			std::cerr << "    Zone: " << zi << " adjZones: " << adjZones.size() << std::endl;
-			GridType::BoundaryCells allSinks;
-			for (int ni = 0; ni < adjZones.size(); ++ni) {
-				int adjZone = adjZones[ni];
-				const auto& bcells = ablv.zones[zi].zoneBoundaryCellMap[adjZone];
-				auto localSinks = convertSinksToLocal(bcells, subGrid);
-				allSinks.insert(localSinks.begin(), localSinks.end());
-			}
-			std::cerr << "  SMALL AbstractLevel: " << levIdx << " Z: " << zi << std::endl;
-			subGrid.costFlowField = precomputeBoundaryDF(allSinks, subGrid);
-		}
-		++levIdx;
-	}
-#endif
-
-
-	for (; levIdx < graph.abstractLevels.size(); ++levIdx) {
+	for (int levIdx=0; levIdx < graph.abstractLevels.size(); ++levIdx) {
 		auto& ablv = graph.abstractLevels[levIdx];
 	    std::cerr << "  AbstractLevel: " << levIdx << " zones: " << ablv.zones.size() << std::endl;
 		for (int zi = 0; zi < ablv.zones.size(); ++zi) {
@@ -295,20 +215,33 @@ void generateFlowGrids(GridToGraph::Graph& graph)
 				std::cerr << "        subGrid: " << subGrid.offsetX<<","<<subGrid.offsetY <<" "<<subGrid.width<<"x"<<subGrid.height
 					<< " sinks: " << localSinks.size() << std::endl;
 				std::cerr << "== lv:" << levIdx << " zn:" << zi << " adj:" << ni <<" sinks:" << localSinks.size() << std::endl;
-				subGrid.costFlowField = generateFlowFieldDial(subGrid.grid, localSinks, subGrid.height, subGrid.width,
-					// Lambda: non-wall (walkable) check.
-					[=](int x, int y, const std::vector<int>& grid) -> bool {
-						if (!subGrid.isInside(x, y)) return false;
-						int idx = SubGrid::indexFor(x,y, subGrid.width);
-						return (grid[idx] & GridType::WALL) == 0;
-					});
+				subGrid.costFlowFields.push_back({ adjZone, generateFlowFieldDial(subGrid, localSinks) });
+				debugFlow(levIdx, zi, adjZone, subGrid);
 			}
 		}
 	}
 }
 
+void debugFlow(int lev, int curZone, int adjacentZone, SubGrid subGrid)
+{
+	std::ostringstream oss;
+	oss << "FLOW_" << lev << "_z_" << curZone << "_to_" << adjacentZone << ".txt";
+	std::ofstream outFile(oss.str());
+
+	int cols = subGrid.width;
+	int rows = subGrid.height;
+	const auto& flowField = subGrid.getFlow(adjacentZone);
+	for (int y = 0; y < rows; ++y) {
+		for (int x = 0; x < cols; ++x) {
+			int idx = SubGrid::indexFor(x, y, cols);
+			uint16_t costDir = flowField[idx];
+			int cost = costDir >> 8;
+			int dir = costDir & 0xFF;
+			outFile << dir << " ";
+        }
+		outFile << std::endl;
+    }
 }
 
-
-
+}
 

@@ -17,7 +17,11 @@ namespace FlowField {
 
 	struct SubGrid {
 		std::vector<int> grid;  // Flat grid array to be used as the input for generateFlowFieldDial.
-		std::vector<uint16_t> costFlowField;
+		std::vector<std::pair<int, std::vector<uint16_t>> > costFlowFields;
+		inline std::vector<uint16_t> getFlow(int adjZone) {
+			for (const auto& pair : costFlowFields) if (pair.first == adjZone) return pair.second;
+			return {};
+		}
 
 		int width;
 		int height;
