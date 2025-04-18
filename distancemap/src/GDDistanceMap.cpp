@@ -1,4 +1,5 @@
 #include <vector>
+#include <algorithm>
 #include <iostream>
 #include <unordered_map>
 #include <queue>
@@ -17,6 +18,8 @@
 #include <GDDistanceMap.hpp>
 
 #include "GridToGraph.hpp"
+#include "FlowField.hpp"
+#include "Routing.hpp"
 #include "GridTypes.hpp"
 #include "MathUtils.h"
 
@@ -151,18 +154,98 @@ std::pair<int,int> getDxDy(GridType::Point fromPos, GridType::Point nextPos) {
 }
 
 
+double computeAngle(double dx, double dy) {
+    return std::fmod(std::atan2(dy, dx) * (180.0 / MY_PI) + 360.0, 360.0);
+}
 // Helper function to compute angle
 double computeAngle(GridType::Point from, GridType::Point to) {
     double dx = to.first - from.first;
     double dy = to.second - from.second;
-    return std::fmod(std::atan2(dy, dx) * (180.0 / MY_PI) + 360.0, 360.0);
+    return computeAngle(dx, dy);
 }
 
 // Function to get the next move as an angle
 double getNextMove(const GridToGraph::Graph& graph, const GridType::Point& source, const GridType::Point& target)
 {
+    // Check all the levels and find the level at which the zones are adjacent
+    // - Not sure if could do top down search, I *think* it's possible to be
+    // (say) adjacent at level 2, but same at level 1, because zones are any shape
+    int levelSame = -1;
+    int levelAdj = -1;
+    for (int levelIdx=0; levelIdx < graph.abstractLevels.size(); ++levelIdx)
+    {
+        const auto& ablv = graph.abstractLevels[levelIdx];
+        const auto& targetZone = ablv.zoneGrid[target.second][target.first].closestAbstractNodeIdx;
+        const auto& sourceZone = ablv.zoneGrid[source.second][source.first].closestAbstractNodeIdx;
+
+        // Check if in same zone for this level
+        if (levelSame == -1 && targetZone == sourceZone)
+        {
+            levelSame = levelIdx;
+            continue;
+        }
+
+        // Check if target is one of the source neighbors
+        for (int adjZone : ablv.zones[sourceZone].adjacentZones)
+        {
+            if (adjZone == targetZone)
+            {
+                levelAdj = levelIdx;
+                break;
+            }
+        }
+        // If found adjacent then we have the lowest level that they are adjacent
+        if (levelAdj != -1)
+        {
+            break;
+        }
+    }
+
+    // Check if found adjacent zones
+    if (levelAdj != -1) {
+        const auto& ablv = graph.abstractLevels[levelAdj];
+        const auto& sourceZone = ablv.zoneGrid[source.second][source.first].closestAbstractNodeIdx;
+        const auto& targetZone = ablv.zoneGrid[target.second][target.first].closestAbstractNodeIdx;
+        const auto& subgrid = ablv.subGrids[sourceZone];
+        const auto& flow = subgrid.getFlow(targetZone);
+        uint16_t sub = flow[FlowField::SubGrid::indexFor(source.first, source.second, subgrid.width)];
+        const auto& dir = GridType::directions8[sub & 0xff];
+        return computeAngle(dir.first, dir.second);
+
+    }
+    // No adjacent, check if found same zone
+    else if (levelSame != -1) {
+        const auto& ablv = graph.abstractLevels[levelSame];
+        const auto& sameZone = ablv.zoneGrid[source.second][source.first].closestAbstractNodeIdx;
+        const auto& zoneInfo = ablv.zones[sameZone];
+        const auto& zoneBases = zoneInfo.baseNodeIdxs;
+        const auto& zoneEdges = zoneInfo.baseEdgeIdxs;
+
+        const auto& grid = graph.infoGrid;
+        int sourceCell = grid[source.second][source.first];
+        int targetCell = grid[target.second][target.first];
+
+        // Use A* to route, or use Cell info
+		if (sourceCell&GridType::XPND) {
+		}
+        else if (sourceCell & GridType::NODE) {
+
+        }
+    	else if (sourceCell & GridType::DEND) {
+	        
+        }
+        else {
+        }
+        const auto routeEdges = Routing::findZonePath(graph.routingGraph,
+            zoneBases, zoneEdges,
+            sourceCell & 0xffff, targetCell & 0xffff);
+
+	}
+	else {
+
+	}
+
 	const auto& ablv = graph.abstractLevels[0];
-    const GridToGraph::GridPointInfo& sourceInfo = ablv.zoneGrid[source.second][source.first];
     const GridToGraph::GridPointInfo& targetInfo = ablv.zoneGrid[target.second][target.first];
 
     // **1. Check if already at or adjacent to the target**

@@ -367,7 +367,15 @@ inline bool isPath(int cellValue) {
     return cellValue && !isNode(cellValue);
 }
 
-
+#ifdef NO_DEBUG
+void writeGridToFile(const std::vector<std::vector<int>>& grid, const std::string& filename) { }
+void debugDump(const Graph& graph) { }
+void debugGridEdges(const Graph& graphs) { }
+void debugAbstractNodes(int pass, const AbstractLevel& ablv, const Graph& graph) { }
+void debugAbstractEdges(int pass, const AbstractLevel& ablv, const Graph& graph, const char* fname) { }
+void debugZones(int pass, const AbstractLevel& ablv, const Graph& graph) { }
+void debugZoneBoundaries(int pass, const AbstractLevel& ablv) { }
+#else
 void writeGridToFile(const std::vector<std::vector<int>>& grid, const std::string& filename);
 void debugDump(const Graph& graph);
 void debugGridEdges(const Graph& graphs);
@@ -375,6 +383,7 @@ void debugAbstractNodes(int pass, const AbstractLevel& ablv, const Graph& graph)
 void debugAbstractEdges(int pass, const AbstractLevel& ablv, const Graph& graph, const char* fname);
 void debugZones(int pass, const AbstractLevel& ablv, const Graph& graph);
 void debugZoneBoundaries(int pass, const AbstractLevel& ablv);
+#endif
 
 void extraThining(Grid& grid) {
 	// Idea was to change non-thinned
@@ -1502,16 +1511,10 @@ ZoneGrid generateNavigationGrid(
 
 //////////////////////////////////////////////////////////////////////
 
-#include <vector>
-#include <set>
-#include <omp.h>
-
-using namespace std;
-
-vector<vector<int>> computeAllPathDists(const vector<Edge>& baseEdges, int numNodes)
+std::vector<std::vector<int>> computeAllPathDists(const std::vector<Edge>& baseEdges, int numNodes)
 {
     // Build adjacency list
-    vector<vector<pair<int, int>>> adjList(numNodes);
+    std::vector<std::vector<std::pair<int, int>>> adjList(numNodes);
     for (const auto& edge : baseEdges) {
         int weight = edge.path.size();
         adjList[edge.from].emplace_back(edge.to, weight);
@@ -1519,13 +1522,13 @@ vector<vector<int>> computeAllPathDists(const vector<Edge>& baseEdges, int numNo
     }
 
     // Initialize distance matrix
-    const int INF = numeric_limits<int>::max();
-    vector<vector<int>> dist(numNodes, vector<int>(numNodes, INF));
+    const int INF = std::numeric_limits<int>::max();
+    std::vector<std::vector<int>> dist(numNodes, std::vector<int>(numNodes, INF));
 
 	for (int start = 0; start < numNodes; ++start) {
-		vector<int> localDist(numNodes, INF);
+		std::vector<int> localDist(numNodes, INF);
 		localDist[start] = 0;
-		set<pair<int, int>> pq;
+		std::set<std::pair<int, int>> pq;
 		pq.insert({ 0, start });
 
 		while (!pq.empty()) {
@@ -2013,20 +2016,28 @@ GD_API Graph makeGraph(const Grid& floorGrid)
     //
 	std::cout << "==MAKE PATHS" << std::endl;
 	computeAllPathDists(graph.baseEdges, graph.baseNodes.size());
-	std::cout << "==MADE DISTS" << std::endl;
 
+    //
+    // Pre-compute routing graph info
+    //
+	std::cout << "==ROUTING GRAPH" << std::endl;
+    graph.routingGraph = Routing::buildSparseGraph(graph.baseNodes, graph.baseEdges);
+
+	std::cout << "==========GRAPH DONE" << std::endl;
 	debugDump(graph);
 	return graph;
 }
 
 ///////////////////////////////////////////////////////////
-///
+
 const char* makeDebugName(int pass, const char* name)
 {
 	static char fname[256];
 	sprintf(fname, "GRID_%d_%s.tga", pass, name);
 	return fname;
 }
+
+#ifndef NO_DEBUG
 void debugGridEdges(const Graph& graph)
 {
 	std::vector<int> uncon = checkConnectivity(graph.baseGraph, graph.baseNodes.size());
@@ -2443,7 +2454,9 @@ void debugDump(const Graph& graph)
 		}
 	}
 }
+#endif
 
+#ifndef NO_DEBUG
 void writeGridToFile(const std::vector<std::vector<int>>& grid, const std::string& filename)
 {
     std::ofstream outFile(filename);
@@ -2458,6 +2471,7 @@ void writeGridToFile(const std::vector<std::vector<int>>& grid, const std::strin
 		outFile << std::endl;
     }
 }
+#endif
 
 GD_API std::vector<std::vector<int>> readGridFromFile(const std::string& filename)
 {

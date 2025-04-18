@@ -10,12 +10,13 @@
 
 namespace GridType {
 
-const int NODE = 0x010000;
-const int DEND = 0x020000;
-const int EDGE = 0x040000;
-const int XPND = 0x080000;
-const int BOUNDARY = 0x400000;
-const int WALL = 0x800000;
+    // InfoGrid has int's with bottom word set to an index
+const int NODE = 0x010000;   // baseNode index
+const int DEND = 0x020000;   // baseNode index
+const int EDGE = 0x040000;   // baseEdge index (is part of Edge path)
+const int XPND = 0x080000;   // baseEdge index (EDGE is set)
+const int BOUNDARY = 0x400000; // 0 (WALL with at least one non-WALL neighbor)
+const int WALL = 0x800000;   // 0
 
 struct PairHash {
     template <typename T1, typename T2>

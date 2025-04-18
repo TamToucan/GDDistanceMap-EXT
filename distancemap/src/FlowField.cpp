@@ -25,13 +25,8 @@ void debugFlow(int lev, int curZone, int adjacentZone, SubGrid subGrid);
 	constexpr uint8_t NO_DIR = 127;
 	constexpr uint8_t SINK_BIT = 0x80;
 
-	// Movement in 8 directions8: N, NE, E, SE, S, SW, W, NW.
-	constexpr std::array<int, 8> dx = { 0,  1, 1,  1,  0, -1, -1, -1 };
-	constexpr std::array<int, 8> dy = { -1, -1,0,  1,  1,  1,  0, -1 };
-
 	// Given uniform cost, each step costs 1.
 	constexpr uint8_t STEP_COST = 1;
-
 
 // Extract a subgrid for the target zone.
 // zoneGrid: global vector of vector of GridPointInfo (size = rows x cols)
@@ -155,8 +150,8 @@ std::vector<uint16_t> generateFlowFieldDial(const SubGrid& subGrid, const std::v
 
 			// For each of the 8 neighbors.
 			for (int d = 0; d < 8; ++d) {
-				int nx = x + dx[d];
-				int ny = y + dy[d];
+				int nx = x + GridType::directions8[d].first;
+				int ny = y + GridType::directions8[d].second;
 				// Check bounds 
 				if (!subGrid.isInside(nx, ny)) continue;
 

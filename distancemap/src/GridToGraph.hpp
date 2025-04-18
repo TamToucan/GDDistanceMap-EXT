@@ -5,8 +5,9 @@
 #include <unordered_map>
 #include <utility>
 
-#include "FlowField.hpp"
 #include "GridTypes.hpp"
+#include "FlowField.hpp"
+#include "Routing.hpp"
 
 #ifdef _WIN32
 #ifdef GDDISTANCEMAP_EXPORTS  // Must match your project name
@@ -117,6 +118,7 @@ struct Graph {
     GridType::Grid infoGrid;
     BaseGraph baseGraph;
     PathCostMap pathCostMap;
+    Routing::SparseGraph routingGraph;
     std::vector<Edge> baseEdges;
     std::vector<GridType::Point> baseNodes;
     std::vector<GridType::Point> deadEnds;
