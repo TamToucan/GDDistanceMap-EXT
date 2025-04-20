@@ -1,3 +1,4 @@
+#include <iostream>
 #include <vector>
 #include <queue>
 #include <unordered_set>
@@ -6,11 +7,13 @@
 #include <algorithm>
 
 #include "Routing.hpp"
+#include "GridToGraph.hpp"
 
 
 namespace Routing {
 
-SparseGraph buildSparseGraph(const std::vector<GridType::Point>& baseNodes, const std::vector<GridType::Edge>& baseEdges)
+SparseGraph buildSparseGraph(const std::vector<GridType::Point>& baseNodes, const std::vector<GridType::Edge>& baseEdges,
+    const GridType::Grid& infoGrid)
 {
     SparseGraph g;
     const int numNodes = baseNodes.size();
@@ -18,16 +21,16 @@ SparseGraph buildSparseGraph(const std::vector<GridType::Point>& baseNodes, cons
     // Initialize adjacency lists
     g.forward_adj.resize(numNodes);
     g.reverse_adj.resize(numNodes);
-    g.edge_costs.reserve(baseEdges.size());
-    g.edge_endpoints.reserve(baseEdges.size());
-    g.node_coords = baseNodes;
+    g.edgeCosts.reserve(baseEdges.size());
+    g.edgeFromTos.reserve(baseEdges.size());
+    g.nodePoints = baseNodes;
 
     for (size_t i = 0; i < baseEdges.size(); ++i) {
         const GridType::Edge& e = baseEdges[i];
         if (e.toDeadEnd) continue;
 
-        g.edge_costs.push_back(e.path.size());
-        g.edge_endpoints.emplace_back(e.from, e.to);
+        g.edgeCosts.push_back(e.path.size());
+        g.edgeFromTos.emplace_back(e.from, e.to);
 
         // Forward connection
         g.forward_adj[e.from].emplace_back(e.to, i);
@@ -41,6 +44,8 @@ SparseGraph buildSparseGraph(const std::vector<GridType::Point>& baseNodes, cons
     return g;
 }
 
+///////////////////////////////////////////////////////////////////////////////////////////
+
 struct SearchState {
     int node;
     int via_edge;
@@ -52,32 +57,27 @@ struct SearchState {
     }
 };
 
-
-std::vector<int> bidirectionalAStar(
-    const SparseGraph& g,
-    int sourceEdgeIdx,
-    int targetEdgeIdx,
-    const std::unordered_set<int>& allowedEdges,
-    const std::unordered_set<int>& allowedNodes)
+std::vector<int> bidirectionalAStar(const SparseGraph& g, int sourceEdgeIdx, int targetEdgeIdx,
+    const std::unordered_set<int>& allowedEdges, const std::unordered_set<int>& allowedNodes)
 {
-    const auto& [srcFrom, srcTo] = g.edge_endpoints[sourceEdgeIdx];
-    const auto& [tgtFrom, tgtTo] = g.edge_endpoints[targetEdgeIdx];
+    const auto& [srcFrom, srcTo] = g.edgeFromTos[sourceEdgeIdx];
+    const auto& [tgtFrom, tgtTo] = g.edgeFromTos[targetEdgeIdx];
 
     // Heuristic helper function
     auto heuristic = [&](int node, bool isForward) {
         if (isForward) {
             return std::min(
-                std::abs(g.node_coords[node].first - g.node_coords[tgtFrom].first) +
-                std::abs(g.node_coords[node].second - g.node_coords[tgtFrom].second),
-                std::abs(g.node_coords[node].first - g.node_coords[tgtTo].first) +
-                std::abs(g.node_coords[node].second - g.node_coords[tgtTo].second)
+                std::abs(g.nodePoints[node].first - g.nodePoints[tgtFrom].first) +
+                std::abs(g.nodePoints[node].second - g.nodePoints[tgtFrom].second),
+                std::abs(g.nodePoints[node].first - g.nodePoints[tgtTo].first) +
+                std::abs(g.nodePoints[node].second - g.nodePoints[tgtTo].second)
             );
         }
         return std::min(
-            std::abs(g.node_coords[node].first - g.node_coords[srcFrom].first) +
-            std::abs(g.node_coords[node].second - g.node_coords[srcFrom].second),
-            std::abs(g.node_coords[node].first - g.node_coords[srcTo].first) +
-            std::abs(g.node_coords[node].second - g.node_coords[srcTo].second)
+            std::abs(g.nodePoints[node].first - g.nodePoints[srcFrom].first) +
+            std::abs(g.nodePoints[node].second - g.nodePoints[srcFrom].second),
+            std::abs(g.nodePoints[node].first - g.nodePoints[srcTo].first) +
+            std::abs(g.nodePoints[node].second - g.nodePoints[srcTo].second)
         );
         };
 
@@ -100,6 +100,7 @@ std::vector<int> bidirectionalAStar(
     while (!forward_q.empty() && !backward_q.empty() && !found_path) {
         // Expand forward search
         if (!forward_q.empty()) {
+            std::cerr << "  FORWARD" << std::endl;
             auto f = forward_q.top();
             forward_q.pop();
 
@@ -118,7 +119,7 @@ std::vector<int> bidirectionalAStar(
             // Expand neighbors
             for (const auto& [neighbor, edge] : g.forward_adj[f.node]) {
                 if (!allowedEdges.count(edge)) continue;
-                int new_cost = f.cost + g.edge_costs[edge];
+                int new_cost = f.cost + g.edgeCosts[edge];
                 if (new_cost < forward_cost[neighbor]) {
                     forward_q.push({ neighbor, edge, new_cost, heuristic(neighbor, true) });
                 }
@@ -127,6 +128,7 @@ std::vector<int> bidirectionalAStar(
 
         // Expand backward search
         if (!backward_q.empty()) {
+            std::cerr << "  BACK" << std::endl;
             auto b = backward_q.top();
             backward_q.pop();
 
@@ -146,7 +148,7 @@ std::vector<int> bidirectionalAStar(
             // Expand neighbors (using reverse adjacency)
             for (const auto& [neighbor, edge] : g.reverse_adj[b.node]) {
                 if (!allowedEdges.count(edge)) continue;
-                int new_cost = b.cost + g.edge_costs[edge];
+                int new_cost = b.cost + g.edgeCosts[edge];
                 if (new_cost < backward_cost[neighbor]) {
                     backward_q.push({
                         neighbor,
@@ -159,6 +161,7 @@ std::vector<int> bidirectionalAStar(
         }
     }
     if (!found_path) {
+        std::cerr << "************ NO PATH" << std::endl;
         return {};
     }
 
@@ -170,8 +173,9 @@ std::vector<int> bidirectionalAStar(
     // Backward reconstruction from meeting node
     int current = meeting_node;
     while (backward_edge[current] != -1) {
+        std::cerr << "    Store BACK: cur: " << current << " => " << backward_edge[current]  << std::endl;
         path.push_back(backward_edge[current]);
-        const auto& edge = g.edge_endpoints[backward_edge[current]];
+        const auto& edge = g.edgeFromTos[backward_edge[current]];
         current = (edge.first == current) ? edge.second : edge.first;
     }
     std::reverse(path.begin(), path.end());
@@ -179,10 +183,14 @@ std::vector<int> bidirectionalAStar(
     // Forward reconstruction to meeting node
     current = meeting_node;
     while (forward_edge[current] != -1) {
-        const auto& edge = g.edge_endpoints[forward_edge[current]];
+        const auto& edge = g.edgeFromTos[forward_edge[current]];
+        std::cerr << "    Store FOR: cur: " << current << " => " << forward_edge[current]  << std::endl;
         path.push_back(forward_edge[current]);
         current = (edge.first == current) ? edge.second : edge.first;
     }
+    std::cerr << "=> PATH " << path.size() << ":  ";
+    for (const auto p : path) std::cerr << p << "  ";
+    std::cerr << std::endl;
 
     return path;
 }
@@ -194,6 +202,7 @@ std::vector<int> findZonePath(const SparseGraph routingGraph,
     int sourceEdgeIdx,
     int targetEdgeIdx)
 {
+    std::cerr << "## Route from: " << sourceEdgeIdx << " to " << targetEdgeIdx << std::endl;
     // Create allowed sets
     std::unordered_set<int> allowedEdges(zoneEdges.begin(), zoneEdges.end());
     std::unordered_set<int> allowedNodes(zoneBases.begin(), zoneBases.end());

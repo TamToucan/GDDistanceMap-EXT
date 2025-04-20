@@ -13,10 +13,17 @@ namespace GridType {
     // InfoGrid has int's with bottom word set to an index
 const int NODE = 0x010000;   // baseNode index
 const int DEND = 0x020000;   // baseNode index
-const int EDGE = 0x040000;   // baseEdge index (is part of Edge path)
-const int XPND = 0x080000;   // baseEdge index (EDGE is set)
+const int EDGE = 0x040000;   // <0|1 2nd Half of path> <15bits baseEdge index>
+const int XPND = 0x080000;   // <3bit directions8 index to Edge> | <13 edge index>
 const int BOUNDARY = 0x400000; // 0 (WALL with at least one non-WALL neighbor)
 const int WALL = 0x800000;   // 0
+
+const int EDGE_MASK = 0x7fff;
+const int EDGE_HALF = 0x8000;
+
+const int XPND_DIR_SHIFT = 13;
+inline int get_XPND_EDGE(int cell) { return cell & ((1<<XPND_DIR_SHIFT)-1); }
+inline int get_XPND_DIR(int cell) { return ((cell & 0xffff) >> XPND_DIR_SHIFT); }
 
 struct PairHash {
     template <typename T1, typename T2>
@@ -31,9 +38,11 @@ using Path = std::vector<Point>;
 
     // Directions for 8 neighbouring cells
 const static std::vector<GridType::Point> directions8 = {
-	{0, -1}, {0, 1}, {-1, 0}, {1, 0}, // Up, Down, Left, Right
-	{-1, -1}, {1, -1}, {1, 1}, {-1, 1} // Diagonals
+	{0, -1}, {0, 1}, {-1, 0}, {1, 0}, // 0 Up, 1 Down, 2 Left, 3 Right
+	{-1, -1}, {1, -1}, {1, 1}, {-1, 1} // 4 LU, 5 RU, 6 RD, 7 LD
 };
+    // Reverses directions8 index to the opposite dir
+const static std::vector<int> reverseDirIndex = { 1, 0, 3, 2, 6, 7, 4, 5 };
 
 	// When going left->right, top->bottom, we only check 4 directions
     // Directions: RIGHT, BOTTOM, BOTTOM_RIGHT, BOTTOM_LEFT

@@ -366,7 +366,6 @@ inline bool isPath(int cellValue) {
     // (assuming only one bit is set for PATH, or that PATH is bit 1)
     return cellValue && !isNode(cellValue);
 }
-
 #ifdef NO_DEBUG
 void writeGridToFile(const std::vector<std::vector<int>>& grid, const std::string& filename) { }
 void debugDump(const Graph& graph) { }
@@ -592,10 +591,14 @@ void markGridNodes(Grid& grid, const std::vector<Point>& nodes, const std::vecto
 void markGridPaths(Grid& grid, const std::vector<Edge>& edges) {
 	int edgeIdx = GridToGraph::EDGE;
     for (const auto& e : edges) {
+        int halfway = e.path.size() / 2;
     	for (const auto& p : e.path) {
     		if (isPath(grid[p.second][p.first])) {
     			grid[p.second][p.first] = edgeIdx;
     		}
+            if (halfway && (--halfway == 0)) {
+                edgeIdx |= GridType::EDGE_HALF;
+            }
     	}
     	++edgeIdx;
     }
@@ -1109,47 +1112,64 @@ BaseGraph fixBaseEdges(std::vector<Edge>& baseEdges, const Grid& infoGrid, const
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
-void expandPaths(Grid& grid)
+void expandPaths(Grid& infoGrid)
 {
-    int rows = grid.size();
-    int cols = grid[0].size();
+	std::cerr << "#####EXPAND"<< std::endl;
+	int rows = infoGrid.size();
+	int cols = infoGrid[0].size();
 
-    std::queue<std::pair<Point, int>> queue;  // {position, distance}
+	// Queue: (row, col, edge_index)
+	std::queue<std::tuple<int, int, int>> q;
 
-    // Initialize queue with all EDGE points from infoGrid
-    for (int r = 0; r < rows; ++r) {
-        for (int c = 0; c < cols; ++c) {
-			// Only EDGE points start BFS
-            if (grid[r][c] & GridToGraph::EDGE) {
-                queue.push({{c, r}, 0});
-            }
-        }
-    }
+	// Initialize: Mark edge cells and enqueue them
+	for (int r = 0; r < rows; ++r) {
+		for (int c = 0; c < cols; ++c) {
+			if (infoGrid[r][c] & GridType::EDGE) {
+				int edgeIndex = infoGrid[r][c] & GridType::EDGE_MASK;
+				q.emplace(r, c, edgeIndex);
+                std::cerr << "##EDGE:" << c << "," << r << " idx: " << edgeIndex << std::endl;
+			}
+		}
+	}
 
-    // Process BFS queue
-    while (!queue.empty()) {
-        auto [pos, dist] = queue.front();
-        queue.pop();
+	// BFS to propagate direction toward the nearest edge
+	while (!q.empty()) {
+		auto [r, c, edgeIndex] = q.front();
+		q.pop();
 
-        int c = pos.first;
-    	int r = pos.second;
+		for (int dir = 0; dir < 8; ++dir) {
+			int nr = r + GridType::directions8[dir].second;
+			int nc = c + GridType::directions8[dir].first;
 
-        // Attempt to expand in all 8 directions8
-        for (const auto& [dc, dr] : directions8) {
-            int nc = c + dc;
-            int nr = r + dr;
+			int& cell = infoGrid[nr][nc];
+            if (cell & 0xffff0000) continue;
 
-            // Check bounds and ensure we only expand empty cells
-            if (grid[nr][nc] == GridToGraph::EMPTY) {
-                int newDist = dist + 1;
-
-                grid[nr][nc] = (newDist & 0xFFFF) | GridToGraph::XPND;
-                queue.push({{nc, nr}, newDist});
-            }
-        }
-    }
+			// Encode: XPND (direction << 13) | edge_index
+			cell =  XPND | (GridType::reverseDirIndex[dir] << XPND_DIR_SHIFT) | edgeIndex;
+            std::cerr << "## " << c << "," << r << " => " << std::hex << cell << std::dec
+			<< " (D:" << get_XPND_DIR(cell) << " E:" << get_XPND_EDGE(cell) << ")" << std::endl;
+			q.emplace(nr, nc, edgeIndex);
+		}
+	}
 }
 
+const char* getDirectionStr(int dir)
+{
+	switch (dir)
+	{
+	case 0: return "↑";
+	case 1: return "↓";
+	case 2: return "←";
+	case 3: return "→";
+	case 4: return "↖";
+	case 5: return "↗";
+	case 6: return "↙";
+	case 7: return "↘";
+	}
+	return "X";
+}
+
+//////////////////////////////////////////////////////////////
 
 // Euclidean distance function
 double euclideanDistance(const Point& a, const Point& b) {
@@ -1610,7 +1630,6 @@ std::vector<ZoneInfo> generateAbstractZones(ZoneGrid& zoneGrid,
 				// Add this cell to the queue for further expansion
                 q.emplace(nc, nr, abstractIdx, newCost);
             }
-
         }
     }
     std::vector<ZoneInfo> zones(abstractNodes.size());
@@ -1648,7 +1667,7 @@ std::vector<ZoneInfo> generateAbstractZones(ZoneGrid& zoneGrid,
             int curBaseNode = abstractNodes[curZone].baseCenterNode;
 
 			// Bottom bits of infoGrid are node or edge index
-			int idx = cell & 0xFFFF;
+			int idx = cell & GridType::EDGE_MASK;
 
 			// If node and/or new zone boundary then add to zone's list
 			if (cell & NODE) {
@@ -1998,6 +2017,30 @@ GD_API Graph makeGraph(const Grid& floorGrid)
 	restoreWalls(graph.infoGrid, floorGrid);
 	markGridBoundaries(graph.infoGrid);
 	expandPaths(graph.infoGrid);
+	{
+        std::cerr << "####INFO GRID" << std::endl;
+		for (const auto& row : graph.infoGrid)
+		{
+			for (const auto& cell : row)
+			{
+                char c = 'X';
+                if (cell & NODE) c = 'N';
+                else if (cell & DEND) c = 'd';
+                else if (cell & EDGE) c = '-';
+                else if (cell & WALL) c = '#';
+                else if (cell & XPND) c = 'x';
+                if (c != 'x') {
+                    std::cerr << std::hex << c << std::dec;
+                }
+                else
+                {
+                    std::cerr << get_XPND_DIR(cell);
+                }
+			}
+            std::cerr << std::endl;
+		}
+        std::cerr << "#############" << std::endl;
+	}
 
     //
 	// Generate the abstract levels with abstract nodes and edges, zones
@@ -2021,7 +2064,7 @@ GD_API Graph makeGraph(const Grid& floorGrid)
     // Pre-compute routing graph info
     //
 	std::cout << "==ROUTING GRAPH" << std::endl;
-    graph.routingGraph = Routing::buildSparseGraph(graph.baseNodes, graph.baseEdges);
+    graph.routingGraph = Routing::buildSparseGraph(graph.baseNodes, graph.baseEdges, graph.infoGrid);
 
 	std::cout << "==========GRAPH DONE" << std::endl;
 	debugDump(graph);
@@ -2281,7 +2324,7 @@ void debugDump(const Graph& graph)
 					}
 				}
 				else if (n & EDGE) {
-					int e = n & 0xffff;
+					int e = n & GridType::EDGE_MASK;
 					if (e >= 100) {
 						std::cerr << e << "e";
 					}

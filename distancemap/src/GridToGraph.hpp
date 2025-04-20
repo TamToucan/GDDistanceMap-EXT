@@ -4,6 +4,7 @@
 #include <vector>
 #include <unordered_map>
 #include <utility>
+#include <string>
 
 #include "GridTypes.hpp"
 #include "FlowField.hpp"
