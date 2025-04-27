@@ -116,6 +116,27 @@ std::vector<std::pair<int, int>> convertSinksToLocal(const GridType::BoundaryCel
 
 std::vector<uint16_t> generateFlowFieldDial(const SubGrid& subGrid, const std::vector<std::pair<int, int>>& sinks)
 {
+#if 0
+	std::cout << std::endl;
+	std::cout << "W: " << subGrid.width << " H: " << subGrid.height;
+	std::cout << " OXY: " << subGrid.offsetX << "m" << subGrid.offsetY << std::endl;;
+	int idx = 0;
+	for (int h = 0; h < subGrid.height; ++h) {
+		for (int w = 0; w < subGrid.width; ++w)
+		{
+			auto cell = subGrid.grid[idx++];
+			std::cout << ((cell == GridType::WALL) ? 'W' : '0') << ", ";
+		}
+		std::cout << std::endl;
+	}
+	std::cout << "std::vector<std::pair<int,int>> sinks = { ";
+	for (const auto s : sinks)
+	{
+		std::cout << "{" << s.first << "," << s.second << "}, ";
+	}
+	std::cout << " };" << std::endl;
+#endif
+
 	const std::vector<int>& grid = subGrid.grid;
 	int rows = subGrid.height;
 	int cols = subGrid.width;
@@ -139,37 +160,47 @@ std::vector<uint16_t> generateFlowFieldDial(const SubGrid& subGrid, const std::v
 	}
 
 	// Dial's algorithm: iterate cost by cost.
-	for (uint8_t cost = 0; cost <= MAX_COST && !buckets[cost].empty(); ++cost) {
-		std::cerr << "COST: " << (int)cost << " bucket = " << buckets[cost].size() << std::endl;
-		// Process all cells in the current cost bucket.
-		for (int curIdx : buckets[cost]) {
-			// Decode current cell's coordinates.
-			int x = curIdx % cols;
-			int y = curIdx / cols;
-			uint8_t newCost = cost + STEP_COST;
+	uint8_t cost = 0;
+	while (cost <= MAX_COST) {
+		auto& bucket = buckets[cost];
+		if (bucket.empty()) {
+			// no cells at this cost, move on
+			std::cerr << "SKIP COST: " << static_cast<int>(cost) << std::endl;
+			++cost;
+			if (cost == 0) break;
+			continue;
+		}
 
-			// For each of the 8 neighbors.
-			for (int d = 0; d < 8; ++d) {
-				int nx = x + GridType::directions8[d].first;
-				int ny = y + GridType::directions8[d].second;
-				// Check bounds 
-				if (!subGrid.isInside(nx, ny)) continue;
+		// Pop one cell from the back of the current-cost bucket
+		int curIdx = bucket.back();
+		std::cerr << "COST " << static_cast<int>(cost) << " index " << curIdx << std::endl;
+		bucket.pop_back();
+		// Decode current cell's coordinates.
+		int x = curIdx % cols;
+		int y = curIdx / cols;
+		uint8_t newCost = cost + STEP_COST;
 
-				// Check wall
-				int nIdx = SubGrid::indexFor(nx, ny, cols);
-				if (grid[nIdx] & GridType::WALL) continue;
+		// For each of the 8 neighbors.
+		for (int d = 0; d < 8; ++d) {
+			int nx = x + GridType::directions8[d].first;
+			int ny = y + GridType::directions8[d].second;
+			// Check bounds 
+			if (!subGrid.isInside(nx, ny)) continue;
 
-				uint8_t neighborCost = costFlowField[nIdx] >> 8;
+			// Check wall
+			int nIdx = SubGrid::indexFor(nx, ny, cols);
+			if (grid[nIdx] & GridType::WALL) continue;
 
-				// If we found a shorter path to the neighbor.
-				if (newCost < neighborCost) {
-					// Store the new cost and the direction.
-					// Here we store the reverse direction:
-					// When moving from neighbor to current cell,
-					// the opposite of d is (d + 4) % 8.
-					costFlowField[nIdx] = (newCost << 8) | ((d + 4) % 8);
-					buckets[newCost].push_back(nIdx);
-				}
+			uint8_t neighborCost = costFlowField[nIdx] >> 8;
+
+			// If we found a shorter path to the neighbor.
+			if (newCost < neighborCost) {
+				// Store the new cost and the direction.
+				// Here we store the reverse direction:
+				// When moving from neighbor to current cell,
+				// the opposite of d is (d + 4) % 8.
+				costFlowField[nIdx] = (newCost << 8) | GridType::reverseDirIndex[d];
+				buckets[newCost].push_back(nIdx);
 			}
 		}
 	}
@@ -232,7 +263,7 @@ void debugFlow(int lev, int curZone, int adjacentZone, SubGrid subGrid)
 			uint16_t costDir = flowField[idx];
 			int cost = costDir >> 8;
 			int dir = costDir & 0xFF;
-			outFile << dir << " ";
+			outFile << (dir < 10 ? "  " : (dir<100 ? " " : "")) << dir << " ";
         }
 		outFile << std::endl;
     }

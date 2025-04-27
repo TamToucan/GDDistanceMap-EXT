@@ -173,55 +173,158 @@ int pickNum(int range, int rnd)
     return ((rnd % range) + range) % range;
 }
 
-int getNextEdge(const GridType::Point& pos, const GridType::Grid& infoGrid, const Routing::SparseGraph& routeGraph)
+// returns <EDGE_HALF (if edge halfway)> | <edgeIdx> 
+int getNextEdge(const GridType::Point& pos, std::vector<GridType::Edge> edges,
+    const GridType::Grid& infoGrid, const Routing::SparseGraph& routeGraph)
 {
     std::cerr << "====GetNextEdge: " << pos.first << "," << pos.second << std::endl;
+	int edgeIdx = routeGraph.edgeGrid.get(pos.first, pos.second) & 0xffff;
     int cell = infoGrid[pos.second][pos.first];
-    if (cell & GridType::EDGE) {
-        std::cerr << "      AT EDGE: " << (cell & GridType::EDGE_MASK) << std::endl;
-        return cell & GridType::EDGE_MASK;
-    }
-
+    std::cerr << "   => edgeGrid: " << edgeIdx << " infoGrid:" << std::hex << cell << std::dec << std::endl;
     if (cell & GridType::NODE) {
         int n = cell & 0xffff;
         const auto& connections = routeGraph.forward_adj[n];
         const int idx = pickNum(connections.size(), pos.first ^ pos.second);
+        int edgeIdx = connections[idx].second;
+
         std::cerr << "      AT NODE. cons: " << connections.size()
     	<< " => idx:" << idx
-    	<< " => edge: " << connections[idx].second << std::endl;
-        return connections[idx].second;
-    }
-    if (cell & GridType::DEND) {
-        std::cerr << "      AT DEAD. Find dir" << std::endl;
-        for (const auto [dx, dy] : GridType::directions8) {
-            int nx = pos.first + dx;
-            int ny = pos.second + dy;
-            if (infoGrid[ny][nx] & GridType::EDGE)
-            {
-                std::cerr << "      => " << (infoGrid[ny][nx] & GridType::EDGE_MASK) << std::endl;
-                return (infoGrid[ny][nx] & GridType::EDGE_MASK);
-            }
+    	<< " => edge: " << edgeIdx << std::endl;
+        if (edges[edgeIdx].to == n) {
+            std::cerr << " node:" << n << " is edge TO node => HALFWAY" << std::endl;
+            edgeIdx |= GridType::EDGE_HALF;
         }
-        std::cerr << "************** ERROR. DeadEnd " << pos.first << "," << pos.second << " has no edge" << std::endl;
     }
-    if (cell & GridType::XPND) {
-        int edgeIdx = GridType::get_XPND_EDGE(cell);
-        std::cerr << "      XPND. edge: " << edgeIdx << std::endl;
-        return edgeIdx;
-    }
-    std::cerr << "*******GetEdge: cell " << std::hex << cell << std::dec << std::endl;
-	return -1;
+    std::cerr << "   => " << (edgeIdx & GridType::EDGE_HALF ? "H " : "  ") << (edgeIdx & GridType::EDGE_MASK) << std::endl;
+    return edgeIdx;
 }
 
-double routeToAngle(const GridToGraph::Graph& graph, const std::vector<int>& routeEdges)
+double routeToAngle(const GridToGraph::Graph& graph, const GridType::Point& source, const int srcEdgeIdx, const std::vector<int>& routeNodes)
 {
-    std::cerr << "##FIND ANGLE. edges:" << routeEdges.size() << std::endl;
-    return 0;
+    std::cerr << "##FIND ANGLE. edges:" << routeNodes.size() << std::endl;
+	std::cerr << "ROUTE: " << std::endl;
+    for (int n : routeNodes)
+    {
+        std::cerr << " " << n;
+    }
+	std::cerr << std::endl;
+
+	int srcCell = graph.infoGrid[source.second][source.first];
+	std::cerr << "  Source: " << source.first << "," << source.second << std::hex << " => " << srcCell << std::dec << std::endl;
+
+	bool incPath = false;
+	const auto& fromto = graph.routingGraph.edgeFromTos[srcEdgeIdx];
+	std::cerr << "Checking edge: " << fromto.first << "->" << fromto.second << std::endl;
+    if (srcCell & GridType::XPND) {
+		int dirIdx = GridType::get_XPND_DIR(srcCell);
+		GridType::Point dir = GridType::directions8[dirIdx];
+        std::cerr << "  XPND: Use idx: " << dirIdx << " for dir " << dir.first << "," << dir.second << std::endl;
+		return computeAngle(dir.first, dir.second);
+    }
+    else if (fromto.first ==  routeNodes.front()) {
+        incPath = fromto.second == routeNodes[1];
+        std::cerr << (incPath? "increase " : "decrease") << " path dist to TOnode: " << fromto.second << std::endl;
+    }
+    else if (fromto.second ==  routeNodes.front()) {
+        incPath = ! fromto.first == routeNodes[1];
+        std::cerr << (incPath? "increase " : "decrease") << " path dist to FROMnode: " << fromto.first << std::endl;
+    }
+    else if (srcCell & GridType::EDGE) {
+		std::cout << "ERROR: " << source.first << "," << source.second << " on edge, but not start of path" << std::endl;
+		std::cerr << "ERROR: " << source.first << "," << source.second << " on edge, but not start of path" << std::endl;
+        incPath = (srcCell & GridType::EDGE_HALF);
+    }
+    else
+    {
+		std::cout << "ERROR: " << source.first << "," << source.second << " cell "
+			<< std::hex << srcCell << std::dec << ", but not start of path" << std::endl;
+		std::cerr << "ERROR: " << source.first << "," << source.second << " cell "
+			<< std::hex << srcCell << std::dec << ", but not start of path" << std::endl;
+    }
+
+    int edgeCell = graph.routingGraph.edgeGrid.get(source.first, source.second);
+	std::cerr << "  EdgeCell: " << std::hex << edgeCell << std::dec << std::endl;
+	int dist = edgeCell >> 16;
+	if (dist == 0)
+	{
+		if (routeNodes.size() == 1)
+		{
+			std::cout << "ERROR: " << source.first << "," << source.second << " edgeCell "
+				<< std::hex << edgeCell << std::dec << ", dist 0, but path = 1" << std::endl;
+			std::cerr << "ERROR: " << source.first << "," << source.second << " edgeCell "
+				<< std::hex << edgeCell << std::dec << ", dist 0, but path = 1" << std::endl;
+            return -1;
+		}
+
+        std::cerr << "  DIST 0: Check next node " << routeNodes[1] << std::endl;
+		for (const auto& idx : graph.routingGraph.nodeToEdgeIdxs[routeNodes[1]])
+		{
+			const auto& ft = graph.routingGraph.edgeFromTos[idx];
+            const auto& path = graph.baseEdges[idx].path;
+			std::cerr << "  Node: " << routeNodes[1] << " gave edge:" << idx
+				<< " " << ft.first << "->" << ft.second << ". Check for that node" << std::endl;
+			if (ft.first == routeNodes[1]) {
+				std::cerr << "    => Found " << routeNodes[1] << " move forward" << std::endl;
+                return computeAngle(path.front(), path[1]);
+			}
+			else if (ft.second == routeNodes[1]) {
+				std::cerr << "    => Found " << routeNodes[1] << " move backward" << std::endl;
+                return computeAngle(path.back(), path[path.size() - 2]);
+            }
+		}
+        std::cout << "ERROR: " << source.first << "," << source.second << " edgeCell "
+            << std::hex << edgeCell << std::dec << ". At node, but no edge going to " << routeNodes[1] << std::endl;
+        std::cerr << "ERROR: " << source.first << "," << source.second << " edgeCell "
+            << std::hex << edgeCell << std::dec << ". At node, but no edge going to " << routeNodes[1] << std::endl;
+		return -1;
+	}
+	const GridType::Edge& edge = graph.baseEdges[srcEdgeIdx];
+	dist = std::clamp(dist + (incPath ? 1 : -1), 0, static_cast<int>(edge.path.size() - 1));
+	auto movePnt = edge.path[dist];
+	std::cerr << "  Use " << (incPath ? "increased" : "decrease") << " dist path[" << dist << "] ="
+		<< movePnt.first << "," << movePnt.second << " move from: " << source.first<<","<<source.second << std::endl;
+
+    return computeAngle(source,movePnt);
 }
 
 // Function to get the next move as an angle
-double getNextMove(const GridToGraph::Graph& graph, const GridType::Point& source, const GridType::Point& target)
+double getNextMove(const GridToGraph::Graph& graph, GridType::Point& source, GridType::Point& target)
 {
+    int srcCell = graph.infoGrid[source.second][source.first];
+    if (srcCell & GridType::WALL)
+    {
+		if (srcCell & GridType::BOUNDARY) {
+            int dirIdx = srcCell & GridType::DIR_MASK;
+            source.first += GridType::directions8[dirIdx].first;
+            source.second += GridType::directions8[dirIdx].second;
+            std::cerr << source.first << "," << source.second << " DIR: " << dirIdx << std::endl;
+        }
+
+        if (graph.infoGrid[source.second][source.first] & GridType::WALL) {
+            std::cout << "ERROR: " << source.first << "," << source.second << " is WALL: SRC ***************************" << std::endl;
+            std::cerr << "ERROR: " << source.first << "," << source.second << " is WALL: SRC ***************************" << std::endl;
+			return 0;
+        }
+    }
+
+    int tgtCell = graph.infoGrid[target.second][target.first];
+    if (tgtCell & GridType::WALL)
+    {
+		if (tgtCell & GridType::BOUNDARY) {
+            std::cerr << "MOVED TARGET " << target.first << "," << target.second << " => ";
+            int dirIdx = tgtCell & GridType::DIR_MASK;
+            target.first += GridType::directions8[dirIdx].first;
+            target.second += GridType::directions8[dirIdx].second;
+            std::cerr << target.first << "," << target.second << " DIR: " << dirIdx << std::endl;
+        }
+
+        if (graph.infoGrid[target.second][target.first] & GridType::WALL) {
+            std::cout << "ERROR: " << target.first << "," << target.second << " is WALL: TARG ***************************" << std::endl;
+            std::cerr << "ERROR: " << target.first << "," << target.second << " is WALL: TARG ***************************" << std::endl;
+			return 0;
+        }
+    }
+
     // Check all the levels and find the level at which the zones are adjacent
     // - Not sure if could do top down search, I *think* it's possible to be
     // (say) adjacent at level 2, but same at level 1, because zones are any shape
@@ -232,7 +335,7 @@ double getNextMove(const GridToGraph::Graph& graph, const GridType::Point& sourc
         const auto& ablv = graph.abstractLevels[levelIdx];
         const auto& targetZone = ablv.zoneGrid[target.second][target.first].closestAbstractNodeIdx;
         const auto& sourceZone = ablv.zoneGrid[source.second][source.first].closestAbstractNodeIdx;
-
+        std::cerr << "LEVL: " << levelIdx << " src abNode: " << sourceZone << " dst abNode:" << targetZone << std::endl;
         // Check if in same zone for this level
         if (zoneSame == -1 && targetZone == sourceZone)
         {
@@ -247,7 +350,7 @@ double getNextMove(const GridToGraph::Graph& graph, const GridType::Point& sourc
             if (adjZone == targetZone)
             {
                 zoneAdj = levelIdx;
-				std::cerr << "==Zone ADJ: " << zoneSame << std::endl;
+				std::cerr << "==Zone ADJ: " << zoneAdj << std::endl;
                 break;
             }
         }
@@ -264,65 +367,87 @@ double getNextMove(const GridToGraph::Graph& graph, const GridType::Point& sourc
         const auto& sourceZone = ablv.zoneGrid[source.second][source.first].closestAbstractNodeIdx;
         const auto& targetZone = ablv.zoneGrid[target.second][target.first].closestAbstractNodeIdx;
         const auto& subgrid = ablv.subGrids[sourceZone];
-        const auto& flow = subgrid.getFlow(targetZone);
-        uint16_t sub = flow[FlowField::SubGrid::indexFor(source.first, source.second, subgrid.width)];
+        uint16_t sub = subgrid.getCostFlow(source.first, source.second, subgrid.getFlow(targetZone));
         const auto& dir = GridType::directions8[sub & 0xff];
-		std::cerr << "  ADJ => sZ:" << sourceZone << " tZ: " << targetZone << " sub: " << std::hex << sub << std::dec << std::endl;
+		std::cerr << "  ADJ => sZ:" << sourceZone << " tZ: " << targetZone << " sub: " << std::hex << sub << std::dec
+			<< " => dir: " << dir.first << "," << dir.second << std::endl;
         return computeAngle(dir.first, dir.second);
 
     }
     // No adjacent, check if found same zone
+    int sourceEdge = -1;
+    int targetEdge = -1;
+    int levelIdx = -1;
+    int zoneIdx = -1;
     if (zoneSame != -1) {
-        const auto& ablv = graph.abstractLevels[zoneSame];
-        const auto& sameZone = ablv.zoneGrid[source.second][source.first].closestAbstractNodeIdx;
-        const auto& zoneInfo = ablv.zones[sameZone];
-        const auto& zoneBases = zoneInfo.baseNodeIdxs;
-        const auto& zoneEdges = zoneInfo.baseEdgeIdxs;
+        levelIdx = zoneSame;
+        const auto& ablv = graph.abstractLevels[levelIdx];
+        zoneIdx = ablv.zoneGrid[source.second][source.first].closestAbstractNodeIdx;
 
         const auto& infoGrid = graph.infoGrid;
 
-        // If not on EDGE then move towards edge path
-		int nx = source.first;
-		int ny = source.second;
-		int cell = infoGrid[ny][nx];
-		if (cell & GridType::XPND) {
-            int dirIdx = GridType::get_XPND_DIR(cell);
+        // If on XPND then move towards edge
+		int srcCell = infoGrid[source.second][source.first];
+		if (srcCell & GridType::XPND) {
+            int dirIdx = GridType::get_XPND_DIR(srcCell);
             GridType::Point dir = GridType::directions8[dirIdx];
-			std::cerr << "  SAME src SRC => xy:" << nx<<","<<ny
-			<< " cell:" << std::hex << cell << std::dec <<" dir:" << dirIdx
+			std::cerr << "  SAME src SRC => xy:" << source.first<<","<<source.second
+			<< " cell:" << std::hex << srcCell << std::dec <<" dir:" << dirIdx
 			<< " => " << dir.first << "," << dir.second << std::endl;
 			return computeAngle( dir.first,dir.second );
 		}
 
+        // If not on EDGE then move towards edge path
         // Get the edges to route from/to and get the route
-        int sourceEdge = getNextEdge(source, infoGrid, graph.routingGraph);
-        int targetEdge = getNextEdge(target, graph.infoGrid, graph.routingGraph);
+        sourceEdge = getNextEdge(source, graph.baseEdges, graph.infoGrid, graph.routingGraph);
+        targetEdge = getNextEdge(target, graph.baseEdges, graph.infoGrid, graph.routingGraph);
         std::cerr << "  SAME => Route: " << sourceEdge << " to " << targetEdge << std::endl;
-        const auto routeEdges = Routing::findZonePath(graph.routingGraph,
-            zoneBases, zoneEdges, sourceEdge, targetEdge);
-
-        return routeToAngle(graph, routeEdges);
+		// if both on the edge then move towards target
+		if ((sourceEdge & GridType::EDGE_MASK) == (targetEdge&GridType::EDGE_MASK))
+		{
+            std::cerr << "ROUTE: SAME EDGE: " << (sourceEdge & GridType::EDGE_MASK) << std::endl;
+			const auto& sourcePath = graph.baseEdges[sourceEdge & GridType::EDGE_MASK].path;
+            int sourceDist = graph.routingGraph.edgeGrid.get(source.first,source.second) >> 16;
+            int targetDist = graph.routingGraph.edgeGrid.get(target.first,target.second) >> 16;
+            std::cerr << "  => sourceDist: " << sourceDist << " targetDist: " << targetDist << std::endl;
+            sourceDist += (sourceDist < targetDist) ? 1 : -1;
+            std::cerr << "  => Path[" << sourceDist << "] = "
+                << sourcePath[sourceDist].first << ","<< sourcePath[sourceDist].second << std::endl;
+			return computeAngle(source, sourcePath[sourceDist]);
+		}
 	}
+	// Use last Abstract Level to route.
+    else
+    {
+        std::cerr << "  LAST zone" << std::endl;
+        levelIdx = graph.abstractLevels.size() - 1;
+        const auto& ablv = graph.abstractLevels[levelIdx];
+        zoneIdx = ablv.zoneGrid[source.second][source.first].closestAbstractNodeIdx;
+		const auto& sourceInfo = ablv.zones[zoneIdx];
+        sourceEdge = getNextEdge(source, graph.baseEdges, graph.infoGrid, graph.routingGraph);
 
-    // Use last Abstract Level to route.
-    std::cerr << "  LAST zone" << std::endl;
-    const auto& ablv = graph.abstractLevels.back();
-	const auto& sourceZone = ablv.zoneGrid[source.second][source.first].closestAbstractNodeIdx;
-	const auto& sourceInfo = ablv.zones[sourceZone];
+        GridType::AbstractNode abNode = ablv.abstractNodes[zoneIdx];
+
+        std::cerr << "    Use zone: " << zoneIdx << " baseNode:" << abNode.baseCenterNode << " to find edge" << std::endl;
+        const GridType::Point& targetPos = graph.baseNodes[abNode.baseCenterNode];
+        targetEdge = getNextEdge(targetPos, graph.baseEdges, graph.infoGrid, graph.routingGraph);
+    }
+	// Use the source and target edges to get a route
+    int srcEdgeIdx = (sourceEdge & GridType::EDGE_MASK);
+    int dstEdgeIdx = (targetEdge & GridType::EDGE_MASK);
+    std::cerr << "MOVE: zoneLevel: " << levelIdx << " zoneIndex: " << zoneIdx
+        << " srcEdge:" << srcEdgeIdx << " (" << graph.baseEdges[srcEdgeIdx].from << " -> " << graph.baseEdges[srcEdgeIdx].to << ")" 
+        << " dstEdge:" << dstEdgeIdx << " (" << graph.baseEdges[dstEdgeIdx].from << " -> " << graph.baseEdges[dstEdgeIdx].to << ")"
+        << std::endl;
+
+	const auto& ablv = graph.abstractLevels[levelIdx];
+	const auto& sourceInfo = ablv.zones[zoneIdx];
+
 	const auto& zoneBases = sourceInfo.baseNodeIdxs;
 	const auto& zoneEdges = sourceInfo.baseEdgeIdxs;
-	int sourceEdge = getNextEdge(source, graph.infoGrid, graph.routingGraph);
-
-    GridType::AbstractNode abNode = ablv.abstractNodes[sourceZone];
-
-    std::cerr << "    Use zone: " << sourceZone << " baseNode:" << abNode.baseCenterNode << " to find edge" << std::endl;
-    const GridType::Point& targetPos = graph.baseNodes[abNode.baseCenterNode];
-	int targetEdge = getNextEdge(targetPos, graph.infoGrid, graph.routingGraph);
-
-	const auto routeEdges = Routing::findZonePath(graph.routingGraph,
-		zoneBases, zoneEdges, sourceEdge, targetEdge);
-
-    return routeToAngle(graph, routeEdges);
+	const auto routeNodes = Routing::findZonePath(graph.routingGraph,
+		zoneBases, zoneEdges, srcEdgeIdx, dstEdgeIdx);
+	return routeToAngle(graph, source, srcEdgeIdx, routeNodes);
 }
 
 int directionToDegrees(const GridType::Point p) {
@@ -344,17 +469,12 @@ int directionToDegrees(const GridType::Point p) {
 }
 
 float GDDistanceMap::getMove(godot::Vector2 from, godot::Vector2 to, int type) {
-	std::cerr << "FROM:" << from.x << "," << from.y << " TO " << to.x << "," << to.y << "   cell:" << info.mCellWidth << "x" << info.mCaveHeight << std::endl;
+	std::cerr << "********** FROM:" << from.x << "," << from.y << " TO " << to.x << "," << to.y << "   cell:" << info.mCellWidth << "x" << info.mCaveHeight << std::endl;
 	GridType::Point fromPnt = {from.x/(info.mCellWidth*8), from.y/(info.mCellHeight*8) };
 	GridType::Point toPnt = {to.x/(info.mCellWidth*8), to.y/(info.mCellHeight*8) };
 	std::cerr << "===GETMOVE: " << fromPnt.first << "," << fromPnt.second << " TO " << toPnt.first << "," << toPnt.second << std::endl;
-//FIXME: XXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
-#if 0
-	return 0;
-#else
     float ang = static_cast<float>(getNextMove(graph, fromPnt, toPnt));
 	std::cerr << "  RET " << ang << std::endl;
 	return ang;
-#endif
 }
 

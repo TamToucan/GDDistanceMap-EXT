@@ -1,6 +1,5 @@
 #ifndef _MATHSTUFF_GRID_2D_H
 #define _MATHSTUFF_GRID_2D_H
-#include "godot_cpp/templates/hashfuncs.hpp"
 
 namespace MathStuff {
 
@@ -17,16 +16,30 @@ public:
 		init(width, height);
 	}
 
+	Grid2D(int width, int height, const Element& val) {
+		init(width, height, val);
+	}
+
+	int width() const { return mWidth; }
+	int height() const { return mHeight; }
+
 	void init(int w, int h)
 	{
 		mWidth = w;
 		mHeight = h;
-		mGrid.reserve(mWidth * mHeight);
+		mGrid.resize(mWidth * mHeight);
 	}
+	void init(int w, int h, const Element val)
+	{
+		init(w, h);
+		std::fill(mGrid.begin(), mGrid.end(), val);
+	}
+
 	bool in(int x, int y) const
 	{
-		return x >= 0 && x < mWidth && y >= 0 && y < mWidth;
+		return x >= 0 && x < mWidth && y >= 0 && y < mHeight;
 	}
+
 	int indexFor(int x, int y) const
 	{
 		return y * mWidth + x;
@@ -53,11 +66,11 @@ public:
 	}
 
 	// Non-cost 
-	Element& at(int x, int y) const
+	Element& at(int x, int y)
 	{
 		return at(indexFor(x, y));
 	}
-	Element& at(int idx) const
+	Element& at(int idx)
 	{
 		return mGrid[idx];
 	}

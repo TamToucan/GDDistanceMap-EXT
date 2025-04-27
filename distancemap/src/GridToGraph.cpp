@@ -604,24 +604,23 @@ void markGridPaths(Grid& grid, const std::vector<Edge>& edges) {
     }
 }
 
-// Find all the walls next to a wall and add the BOUNDARY tag
 void markGridBoundaries(Grid& grid) {
     int rows = grid.size();
     int cols = grid[0].size();
 
-    for (int r = 1; r < rows-1; ++r) {
-        for (int c = 1; c < cols-1; ++c) {
-        	// Find non walls
-            if (! (grid[r][c]&WALL)) {
-            	// Check all the neighbors for a wall
-            	for (const auto& [dc, dr] : GridType::searchDirs4) {
-            		int nc = c + dc;
-                    int nr = r + dr;
-            		// All walls around a non-wall are boundary
-            		if (grid[nr][nc]&WALL) {
-            			grid[nr][nc] |= BOUNDARY;  // Mark as BOUNDARY
-            		}
-            	}
+    for (int r = 1; r < rows - 1; ++r) {
+        for (int c = 1; c < cols - 1; ++c) {
+            if (!(grid[r][c] & WALL)) {
+                for (int dirIdx = 0; dirIdx < directions8.size(); ++dirIdx) {
+                    int nc = c + directions8[dirIdx].first;
+                    int nr = r + directions8[dirIdx].second;
+                    if (grid[nr][nc] & WALL) {
+                        // Tag wall with BOUNDARY and direction toward walkable space
+                        // - Clear out old dir bits and apply new ones safely
+                        int& cell = grid[nr][nc];
+                        cell = (cell & ~DIR_MASK) | (GridType::reverseDirIndex[dirIdx] & DIR_MASK) | WALL | BOUNDARY;
+                    }
+                }
             }
         }
     }
@@ -1153,22 +1152,6 @@ void expandPaths(Grid& infoGrid)
 	}
 }
 
-const char* getDirectionStr(int dir)
-{
-	switch (dir)
-	{
-	case 0: return "↑";
-	case 1: return "↓";
-	case 2: return "←";
-	case 3: return "→";
-	case 4: return "↖";
-	case 5: return "↗";
-	case 6: return "↙";
-	case 7: return "↘";
-	}
-	return "X";
-}
-
 //////////////////////////////////////////////////////////////
 
 // Euclidean distance function
@@ -1234,7 +1217,7 @@ Path findPathBetweenNodes(int startNode, int endNode, const std::vector<Edge>& e
     // If no path was found, return empty path
     if (prev[endNode] == -1) return {};
 
-    // **Reconstruct the path from startNode → endNode**
+    // **Reconstruct the path from startNode -> endNode**
     Path fullPath;
     int at = endNode;
 
@@ -1617,8 +1600,12 @@ std::vector<ZoneInfo> generateAbstractZones(ZoneGrid& zoneGrid,
         for (const auto& [dc, dr] : directions8) {
             int nc = c + dc;
             int nr = r + dr;
+			std::cerr << "ZG: TRY " << nc << "," << nr << std::endl;
 
-            if (grid[nr][nc]&WALL) continue;
+            if (grid[nr][nc] & WALL) {
+				std::cerr << "   => WALL" << std::endl;
+                continue;
+            }
 
             // Expand cost of zone
             int newCost = cost + 1;
@@ -1627,6 +1614,7 @@ std::vector<ZoneInfo> generateAbstractZones(ZoneGrid& zoneGrid,
             if (newCost < zoneGrid[nr][nc].distanceToAbstractNode) {
                 zoneGrid[nr][nc].closestAbstractNodeIdx = abstractIdx;
                 zoneGrid[nr][nc].distanceToAbstractNode = newCost;
+                std::cerr << "  => " << nc << "," << nr << " => abNode: " << abstractIdx << " dist:" << newCost << std::endl;
 				// Add this cell to the queue for further expansion
                 q.emplace(nc, nr, abstractIdx, newCost);
             }
@@ -1949,8 +1937,10 @@ GD_API Graph makeGraph(const Grid& floorGrid)
         auto tempGrid = graph.infoGrid;
 
         for (auto& r : tempGrid) {
+            std::cout << "ROW" << std::endl;
             for (auto& c : r) {
                 c = (c == EMPTY) ? WALL : EMPTY;
+            std::cout << "   col: " << c << std::endl;
             }
         }
         makeTGA("GRID_INPUT.tga", tempGrid);

@@ -2,16 +2,20 @@
 #define _ROUTING_HPP
 
 #include <vector>
+#include <cstdint>
 #include "GridTypes.hpp"
+#include "Grid2D.h"
 
 namespace Routing {
 
 struct SparseGraph {
-    std::vector<std::vector<std::pair<int, int>>> forward_adj;  // node -> {neighbor, edge_idx}
-    std::vector<std::vector<std::pair<int, int>>> reverse_adj;
+    std::vector<std::vector<std::pair<int, int>>> forward_adj;  // node -> { otherNode, edge_idx }
+    std::vector<std::vector<std::pair<int, int>>> reverse_adj;  // otherNode -> { node, edge_idx }
     std::vector<int> edgeCosts;
-    std::vector<std::pair<int,int>> edgeFromTos;
-    std::vector<GridType::Point> nodePoints;
+	std::vector<std::pair<int, int>> edgeFromTos; // { from, to (to == -1) for deadEnds }
+	std::vector<std::vector<int>> nodeToEdgeIdxs;
+    std::vector<GridType::Point> nodePoints;      // baseNodes
+	MathStuff::Grid2D<uint32_t> edgeGrid;         // <16 dist along path of closest edge> |1=past halfway | <15 edge index>
 };
 
 SparseGraph buildSparseGraph(const std::vector<GridType::Point>& baseNodes,
