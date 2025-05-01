@@ -9,6 +9,7 @@
 #include "GridToGraph.hpp"
 #include "GridTypes.hpp"
 #include "WallDistanceGrid.hpp"
+#include "GDTracker.hpp"
 
 namespace godot {
 
@@ -39,6 +40,7 @@ protected:
     GridType::Grid wallDistGrid;
     DistanceMap::SightGrid sightGrid;
 	GridToGraph::Graph graph;
+	GDTracker* pTracker = nullptr;
 
 public:
 	GDDistanceMap();
@@ -49,9 +51,14 @@ public:
 	GDDistanceMap* setCellSize(godot::Vector2i sz);
 	GDDistanceMap* setFloor(godot::Vector2i floor);
 
+	GDDistanceMap* setTracker(godot::Object* go) {
+		pTracker = godot::Object::cast_to<GDTracker>(go);
+		return this;
+	}
+
 	void make_it(TileMapLayer* pTileMap, int layer);
 
-	float getMove(godot::Vector2 from, godot::Vector2 to, int type);
+	float getMove(godot::Node* node, godot::Vector2 from, godot::Vector2 to, int type);
 
 private:
 	bool isFloor(int cx, int cy, TileMapLayer* pTileMap, int layer);

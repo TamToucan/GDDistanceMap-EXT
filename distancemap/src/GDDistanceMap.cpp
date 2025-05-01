@@ -17,6 +17,8 @@
 #include <godot_cpp/godot.hpp>
 #include <GDDistanceMap.hpp>
 
+#include "GDTracker.hpp"
+
 #include "GridToGraph.hpp"
 #include "FlowField.hpp"
 #include "Routing.hpp"
@@ -30,8 +32,8 @@ void GDDistanceMap::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_cave_size", "caveSize"), &GDDistanceMap::setCaveSize);
 	ClassDB::bind_method(D_METHOD("set_cell_size", "cellSize"), &GDDistanceMap::setCellSize);
 	ClassDB::bind_method(D_METHOD("make_distance_map", "pTileMap", "layer"), &GDDistanceMap::make_it);
-	ClassDB::bind_method(D_METHOD("get_move", "from", "to", "type"), &GDDistanceMap::getMove);
-
+	ClassDB::bind_method(D_METHOD("get_move", "node", "from", "to", "type"), &GDDistanceMap::getMove);
+	ClassDB::bind_method(D_METHOD("set_tracker", "tracker"), &GDDistanceMap::setTracker);
 }
 
 GDDistanceMap::GDDistanceMap() {
@@ -111,6 +113,7 @@ void GDDistanceMap::make_it(TileMapLayer* pTileMap, int layer)
     // Use that floorGrid to create the complete graph for movement
     //
     graph = GridToGraph::makeGraph(floorGrid);
+
 }
 
 // ===========================================================================
@@ -467,8 +470,21 @@ int directionToDegrees(const GridType::Point p) {
     std::cerr << "===> " << p.first << "," << p.second << " => dir: " << dir << std::endl;
     return dir;
 }
+struct RouteCtx {
+	GridType::Point from;
+	GridType::Point to;
+	int type;
+};
 
-float GDDistanceMap::getMove(godot::Vector2 from, godot::Vector2 to, int type) {
+float GDDistanceMap::getMove(godot::Node* id, godot::Vector2 from, godot::Vector2 to, int type) {
+    RouteCtx* ctx = pTracker ? pTracker->getContext<RouteCtx>(id) : nullptr;
+    if (!ctx) {
+		std::cerr << "NO CTX" << std::endl;
+    }
+    else {
+        std::cerr << "CTX: " << ctx->from.first << "," << ctx->from.second << std::endl;
+    }
+
 	std::cerr << "********** FROM:" << from.x << "," << from.y << " TO " << to.x << "," << to.y << "   cell:" << info.mCellWidth << "x" << info.mCaveHeight << std::endl;
 	GridType::Point fromPnt = {from.x/(info.mCellWidth*8), from.y/(info.mCellHeight*8) };
 	GridType::Point toPnt = {to.x/(info.mCellWidth*8), to.y/(info.mCellHeight*8) };

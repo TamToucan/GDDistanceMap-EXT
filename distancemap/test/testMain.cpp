@@ -3,6 +3,8 @@
 #include "GridToGraph.hpp"
 #include "FlowField.hpp"
 
+#include "GDTracker.hpp"
+
 struct FlowField::SubGrid subgrid;
 
 void debugFlow(FlowField::SubGrid subGrid)

@@ -44,18 +44,34 @@ if(MSVC)
     )
 endif()
 
+# 1. First set the paths clearly
+set(GDTRACKER_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../GDTracker-EXT")
+set(GDTRACKER_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/GDTracker/build")
+
+# 2. Add the subdirectory with explicit paths
+add_subdirectory(
+    "${GDTRACKER_SOURCE_DIR}"
+    "${GDTRACKER_BINARY_DIR}"
+)
+
 target_include_directories(${LIB_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src"
 					                   PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/inc"
 					                   PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/lib/Util"
 					                   PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/lib/Algo"
 					                   PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/lib/Stuff"
-					                   PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/lib")
+					                   PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/lib"
+                                       PUBLIC "${GDTRACKER_SOURCE_DIR}/tracker/src")
 
-target_link_libraries(${LIB_NAME} 
-	PRIVATE MathStuff
-	PRIVATE Stuff
-	PRIVATE Algo
-	PUBLIC godot::cpp)
+# 5. Link libraries - CRITICAL FIX HERE
+target_link_libraries(${LIB_NAME}
+    PRIVATE
+        MathStuff
+        Stuff
+        Algo
+        GDTracker.debug
+    PUBLIC
+        godot::cpp
+)
 
 target_include_directories(${LIB_NAME} PRIVATE -isystem ${FETCHCONTENT_BASE_DIR})
 
