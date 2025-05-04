@@ -9,16 +9,15 @@
 using namespace godot;
 
 void initialize_libgddistanceMap(ModuleInitializationLevel p_level) {
-	std::cout << "################# REGISTER OUT" << std::endl;
-	std::cerr << "################# REGISTER ERR" << std::endl;
-	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
+	if (p_level != MODULE_INITIALIZATION_LEVEL_CORE) {
 		return;
 	}
 	ClassDB::register_class<GDDistanceMap>();
+	std::cout << "################# REGISTER GDDistanceMap" << std::endl;
 }
 
 void uninitialize_libgddistanceMap(ModuleInitializationLevel p_level) {
-	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
+	if (p_level != MODULE_INITIALIZATION_LEVEL_CORE) {
 		return;
 	}
 }
@@ -32,7 +31,7 @@ GDExtensionBool GDE_EXPORT libgddistanceMap_init(GDExtensionInterfaceGetProcAddr
 
 	init_obj.register_initializer(initialize_libgddistanceMap);
 	init_obj.register_terminator(uninitialize_libgddistanceMap);
-	init_obj.set_minimum_library_initialization_level(MODULE_INITIALIZATION_LEVEL_SCENE);
+	init_obj.set_minimum_library_initialization_level(MODULE_INITIALIZATION_LEVEL_CORE);
 
 	return init_obj.init();
 }

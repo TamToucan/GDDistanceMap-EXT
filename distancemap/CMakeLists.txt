@@ -60,7 +60,7 @@ target_include_directories(${LIB_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src"
 					                   PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/lib/Algo"
 					                   PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/lib/Stuff"
 					                   PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/lib"
-                                       PUBLIC "${GDTRACKER_SOURCE_DIR}/tracker/src")
+                                       PRIVATE "${GDTRACKER_SOURCE_DIR}/tracker/src")
 
 # 5. Link libraries - CRITICAL FIX HERE
 target_link_libraries(${LIB_NAME}
@@ -78,15 +78,29 @@ target_include_directories(${LIB_NAME} PRIVATE -isystem ${FETCHCONTENT_BASE_DIR}
 add_executable(testMain "${CMAKE_CURRENT_SOURCE_DIR}/test/testMain.cpp")
 target_link_libraries(testMain PRIVATE ${LIB_NAME})
 target_include_directories(testMain PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/src")
-
+    "${CMAKE_CURRENT_SOURCE_DIR}/src"
+    "${GDTRACKER_SOURCE_DIR}/tracker/src"
+)
 if(MSVC)
     target_compile_options(testMain PRIVATE /Zi /Od)
     target_link_options(testMain PRIVATE /DEBUG)
 elseif(MINGW)
-    target_compile_options(${LIB_NAME} PRIVATE -g -O0 -gdwarf-4 -gstrict-dwarf)
-    target_link_options(${LIB_NAME} PRIVATE -g -Wl,--export-all-symbols)
+    target_compile_options(testMain PRIVATE -g -O0)
 endif()
+
+set(LOTT_ADDON_DIR "D:/git/the-lott/addons/gddistanceMap/bin")
+
+add_custom_command(
+    TARGET ${LIB_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        ${LOTT_ADDON_DIR}
+    COMMAND ${CMAKE_COMMAND} -E copy
+        $<TARGET_FILE:${LIB_NAME}>
+        ${LOTT_ADDON_DIR}
+    COMMAND ${CMAKE_COMMAND} -E copy
+        $<TARGET_FILE:GDTracker.debug>
+        ${LOTT_ADDON_DIR}
+)
 
 add_custom_command(
         TARGET ${LIB_NAME}  POST_BUILD

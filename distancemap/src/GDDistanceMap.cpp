@@ -33,7 +33,7 @@ void GDDistanceMap::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_cell_size", "cellSize"), &GDDistanceMap::setCellSize);
 	ClassDB::bind_method(D_METHOD("make_distance_map", "pTileMap", "layer"), &GDDistanceMap::make_it);
 	ClassDB::bind_method(D_METHOD("get_move", "node", "from", "to", "type"), &GDDistanceMap::getMove);
-	ClassDB::bind_method(D_METHOD("set_tracker", "tracker"), &GDDistanceMap::setTracker);
+	ClassDB::bind_method(D_METHOD("set_tracker"), &GDDistanceMap::setTracker);
 }
 
 GDDistanceMap::GDDistanceMap() {
@@ -156,15 +156,27 @@ std::pair<int,int> getDxDy(GridType::Point fromPos, GridType::Point nextPos) {
 	return {dx, dy};
 }
 
+GridType::Point nextPoint(const GridType::Point& from, const GridType::Point& dir) {
+	std::cerr << "##NEXT POINT: From: " << from.first << "," << from.second
+        << " move " << dir.first << "," << dir.second << std::endl;
 
-double computeAngle(double dx, double dy) {
-    return std::fmod(std::atan2(dy, dx) * (180.0 / MY_PI) + 360.0, 360.0);
+	return { from.first + dir.first, from.second + dir.second };
 }
+
+float computeAngle(double dx, double dy) {
+	if (dx == 0 && dy == 0) {
+		return 0.0; // No movement
+	}
+    return static_cast<float>(std::fmod(std::atan2(dy, dx) * (180.0 / MY_PI) + 360.0, 360.0));
+}
+
 // Helper function to compute angle
-double computeAngle(GridType::Point from, GridType::Point to) {
-    double dx = to.first - from.first;
-    double dy = to.second - from.second;
-    return computeAngle(dx, dy);
+GridType::Point nextStep(const GridType::Point& from, const GridType::Point& to) {
+	std::cerr << "##NEXT STEP: From: " << from.first << "," << from.second
+        << " -> " << to.first << "," << to.second << std::endl;
+
+	GridType::Point dir = { to.first - from.first, to.second - from.second };
+    return nextPoint(from, dir);
 }
 
 int pickNum(int range, int rnd)
@@ -202,7 +214,7 @@ int getNextEdge(const GridType::Point& pos, std::vector<GridType::Edge> edges,
     return edgeIdx;
 }
 
-double routeToAngle(const GridToGraph::Graph& graph, const GridType::Point& source, const int srcEdgeIdx, const std::vector<int>& routeNodes)
+GridType::Point routeToNext(const GridToGraph::Graph& graph, const GridType::Point& source, const int srcEdgeIdx, const std::vector<int>& routeNodes)
 {
     std::cerr << "##FIND ANGLE. edges:" << routeNodes.size() << std::endl;
 	std::cerr << "ROUTE: " << std::endl;
@@ -222,7 +234,7 @@ double routeToAngle(const GridToGraph::Graph& graph, const GridType::Point& sour
 		int dirIdx = GridType::get_XPND_DIR(srcCell);
 		GridType::Point dir = GridType::directions8[dirIdx];
         std::cerr << "  XPND: Use idx: " << dirIdx << " for dir " << dir.first << "," << dir.second << std::endl;
-		return computeAngle(dir.first, dir.second);
+		return nextPoint(source, dir);
     }
     else if (fromto.first ==  routeNodes.front()) {
         incPath = fromto.second == routeNodes[1];
@@ -256,7 +268,7 @@ double routeToAngle(const GridToGraph::Graph& graph, const GridType::Point& sour
 				<< std::hex << edgeCell << std::dec << ", dist 0, but path = 1" << std::endl;
 			std::cerr << "ERROR: " << source.first << "," << source.second << " edgeCell "
 				<< std::hex << edgeCell << std::dec << ", dist 0, but path = 1" << std::endl;
-            return -1;
+            return source;
 		}
 
         std::cerr << "  DIST 0: Check next node " << routeNodes[1] << std::endl;
@@ -268,18 +280,18 @@ double routeToAngle(const GridToGraph::Graph& graph, const GridType::Point& sour
 				<< " " << ft.first << "->" << ft.second << ". Check for that node" << std::endl;
 			if (ft.first == routeNodes[1]) {
 				std::cerr << "    => Found " << routeNodes[1] << " move forward" << std::endl;
-                return computeAngle(path.front(), path[1]);
+                return nextStep(path.front(), path[1]);
 			}
 			else if (ft.second == routeNodes[1]) {
 				std::cerr << "    => Found " << routeNodes[1] << " move backward" << std::endl;
-                return computeAngle(path.back(), path[path.size() - 2]);
+                return nextStep(path.back(), path[path.size() - 2]);
             }
 		}
         std::cout << "ERROR: " << source.first << "," << source.second << " edgeCell "
             << std::hex << edgeCell << std::dec << ". At node, but no edge going to " << routeNodes[1] << std::endl;
         std::cerr << "ERROR: " << source.first << "," << source.second << " edgeCell "
             << std::hex << edgeCell << std::dec << ". At node, but no edge going to " << routeNodes[1] << std::endl;
-		return -1;
+		return source;
 	}
 	const GridType::Edge& edge = graph.baseEdges[srcEdgeIdx];
 	dist = std::clamp(dist + (incPath ? 1 : -1), 0, static_cast<int>(edge.path.size() - 1));
@@ -287,11 +299,11 @@ double routeToAngle(const GridToGraph::Graph& graph, const GridType::Point& sour
 	std::cerr << "  Use " << (incPath ? "increased" : "decrease") << " dist path[" << dist << "] ="
 		<< movePnt.first << "," << movePnt.second << " move from: " << source.first<<","<<source.second << std::endl;
 
-    return computeAngle(source,movePnt);
+    return nextStep(source,movePnt);
 }
 
 // Function to get the next move as an angle
-double getNextMove(const GridToGraph::Graph& graph, GridType::Point& source, GridType::Point& target)
+GridType::Point getNextMove(const GridToGraph::Graph& graph, GridType::Point& source, GridType::Point& target)
 {
     int srcCell = graph.infoGrid[source.second][source.first];
     if (srcCell & GridType::WALL)
@@ -306,7 +318,7 @@ double getNextMove(const GridToGraph::Graph& graph, GridType::Point& source, Gri
         if (graph.infoGrid[source.second][source.first] & GridType::WALL) {
             std::cout << "ERROR: " << source.first << "," << source.second << " is WALL: SRC ***************************" << std::endl;
             std::cerr << "ERROR: " << source.first << "," << source.second << " is WALL: SRC ***************************" << std::endl;
-			return 0;
+			return source;
         }
     }
 
@@ -324,7 +336,7 @@ double getNextMove(const GridToGraph::Graph& graph, GridType::Point& source, Gri
         if (graph.infoGrid[target.second][target.first] & GridType::WALL) {
             std::cout << "ERROR: " << target.first << "," << target.second << " is WALL: TARG ***************************" << std::endl;
             std::cerr << "ERROR: " << target.first << "," << target.second << " is WALL: TARG ***************************" << std::endl;
-			return 0;
+			return source;
         }
     }
 
@@ -374,7 +386,7 @@ double getNextMove(const GridToGraph::Graph& graph, GridType::Point& source, Gri
         const auto& dir = GridType::directions8[sub & 0xff];
 		std::cerr << "  ADJ => sZ:" << sourceZone << " tZ: " << targetZone << " sub: " << std::hex << sub << std::dec
 			<< " => dir: " << dir.first << "," << dir.second << std::endl;
-        return computeAngle(dir.first, dir.second);
+        return nextPoint(source, dir);
 
     }
     // No adjacent, check if found same zone
@@ -397,7 +409,7 @@ double getNextMove(const GridToGraph::Graph& graph, GridType::Point& source, Gri
 			std::cerr << "  SAME src SRC => xy:" << source.first<<","<<source.second
 			<< " cell:" << std::hex << srcCell << std::dec <<" dir:" << dirIdx
 			<< " => " << dir.first << "," << dir.second << std::endl;
-			return computeAngle( dir.first,dir.second );
+            return nextPoint(source, dir);
 		}
 
         // If not on EDGE then move towards edge path
@@ -416,7 +428,7 @@ double getNextMove(const GridToGraph::Graph& graph, GridType::Point& source, Gri
             sourceDist += (sourceDist < targetDist) ? 1 : -1;
             std::cerr << "  => Path[" << sourceDist << "] = "
                 << sourcePath[sourceDist].first << ","<< sourcePath[sourceDist].second << std::endl;
-			return computeAngle(source, sourcePath[sourceDist]);
+			return nextStep(source, sourcePath[sourceDist]);
 		}
 	}
 	// Use last Abstract Level to route.
@@ -450,7 +462,7 @@ double getNextMove(const GridToGraph::Graph& graph, GridType::Point& source, Gri
 	const auto& zoneEdges = sourceInfo.baseEdgeIdxs;
 	const auto routeNodes = Routing::findZonePath(graph.routingGraph,
 		zoneBases, zoneEdges, srcEdgeIdx, dstEdgeIdx);
-	return routeToAngle(graph, source, srcEdgeIdx, routeNodes);
+	return routeToNext(graph, source, srcEdgeIdx, routeNodes);
 }
 
 int directionToDegrees(const GridType::Point p) {
@@ -473,24 +485,49 @@ int directionToDegrees(const GridType::Point p) {
 struct RouteCtx {
 	GridType::Point from;
 	GridType::Point to;
+	GridType::Point next;
 	int type;
+    float curDir;
 };
 
-float GDDistanceMap::getMove(godot::Node* id, godot::Vector2 from, godot::Vector2 to, int type) {
-    RouteCtx* ctx = pTracker ? pTracker->getContext<RouteCtx>(id) : nullptr;
-    if (!ctx) {
-		std::cerr << "NO CTX" << std::endl;
-    }
-    else {
-        std::cerr << "CTX: " << ctx->from.first << "," << ctx->from.second << std::endl;
-    }
+static void untrack_cb(godot::Node* id, void* ctx) {
+	if (ctx) {
+		std::cerr << "===UNTRACK id:" << id << " CTX: " << ctx << std::endl;
+		RouteCtx* routeCtx = static_cast<RouteCtx*>(ctx);
+		delete routeCtx;
+	}
+}
 
+float GDDistanceMap::getMove(godot::Node* id, godot::Vector2 from, godot::Vector2 to, int type) {
 	std::cerr << "********** FROM:" << from.x << "," << from.y << " TO " << to.x << "," << to.y << "   cell:" << info.mCellWidth << "x" << info.mCaveHeight << std::endl;
 	GridType::Point fromPnt = {from.x/(info.mCellWidth*8), from.y/(info.mCellHeight*8) };
 	GridType::Point toPnt = {to.x/(info.mCellWidth*8), to.y/(info.mCellHeight*8) };
+
+    RouteCtx* ctx = pTracker ? pTracker->getContext<RouteCtx>(id) : nullptr;
+    std::cerr << "tracker:" << pTracker << " ID:" << id << " CTX = " << ctx << std::endl;
+
+    if (!ctx) {
+		std::cerr << "===CREATE CONTEXT" << std::endl;
+		ctx = new RouteCtx();
+        pTracker->setContext<RouteCtx>(id, ctx);
+		std::cerr << "===ADD CALLBACK" << std::endl;
+        pTracker->set_untrack_callback(untrack_cb);
+    }
+    else if (ctx->type == type) {
+		if (fromPnt.first != ctx->next.first || fromPnt.second != ctx->next.second) {
+		    std::cerr << "===REUSED DIR " << ctx->curDir << std::endl;
+            return ctx->curDir;
+		}
+    }
+
+	ctx->from = fromPnt;
+    ctx->to = toPnt;
+	ctx->type = type;
+
 	std::cerr << "===GETMOVE: " << fromPnt.first << "," << fromPnt.second << " TO " << toPnt.first << "," << toPnt.second << std::endl;
-    float ang = static_cast<float>(getNextMove(graph, fromPnt, toPnt));
-	std::cerr << "  RET " << ang << std::endl;
-	return ang;
+    ctx->next = getNextMove(graph, fromPnt, toPnt);
+	ctx->curDir = computeAngle(ctx->next.first - ctx->from.first, ctx->next.second - ctx->from.second);
+	std::cerr << "##ANG to: " << ctx->next.first <<"," << ctx->next.second << " = " << ctx->curDir << std::endl;
+	return ctx->curDir;
 }
 

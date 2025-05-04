@@ -1937,10 +1937,8 @@ GD_API Graph makeGraph(const Grid& floorGrid)
         auto tempGrid = graph.infoGrid;
 
         for (auto& r : tempGrid) {
-            std::cout << "ROW" << std::endl;
             for (auto& c : r) {
                 c = (c == EMPTY) ? WALL : EMPTY;
-            std::cout << "   col: " << c << std::endl;
             }
         }
         makeTGA("GRID_INPUT.tga", tempGrid);

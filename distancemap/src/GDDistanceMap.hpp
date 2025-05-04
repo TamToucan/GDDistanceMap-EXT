@@ -13,8 +13,8 @@
 
 namespace godot {
 
-class GDDistanceMap : public Object {
-	GDCLASS(GDDistanceMap, Object)
+class GDDistanceMap : public RefCounted {
+	GDCLASS(GDDistanceMap, RefCounted)
 
 public:
 	struct Info {
@@ -40,7 +40,7 @@ protected:
     GridType::Grid wallDistGrid;
     DistanceMap::SightGrid sightGrid;
 	GridToGraph::Graph graph;
-	GDTracker* pTracker = nullptr;
+	GDTracker* pTracker;
 
 public:
 	GDDistanceMap();
@@ -50,12 +50,20 @@ public:
 	GDDistanceMap* setCaveSize(godot::Vector2i sz);
 	GDDistanceMap* setCellSize(godot::Vector2i sz);
 	GDDistanceMap* setFloor(godot::Vector2i floor);
-
-	GDDistanceMap* setTracker(godot::Object* go) {
-		pTracker = godot::Object::cast_to<GDTracker>(go);
+	GDDistanceMap* setTracker() {
+		pTracker = GDTracker::getInstance();
+		std::cout << "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX GOT TRACKER " << pTracker << std::endl;
 		return this;
 	}
-
+#if 0
+	GDDistanceMap* setTracker(godot::Object* go) {
+		if (go != nullptr && go->is_class("GDTracker")) {
+			pTracker = go->cast_to<GDTracker>(go);
+		}
+		std::cerr << "SetTracker: go = " << go << " => " << pTracker << std::endl;
+		return this;
+	}
+#endif
 	void make_it(TileMapLayer* pTileMap, int layer);
 
 	float getMove(godot::Node* node, godot::Vector2 from, godot::Vector2 to, int type);

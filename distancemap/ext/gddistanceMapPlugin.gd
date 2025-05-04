@@ -3,7 +3,7 @@ extends EditorPlugin
 
 
 func _enter_tree():
-	add_custom_type("GDDistanceMap", "Object", preload("gdcave.gd"),preload("res://icon.svg"))
+	add_custom_type("GDDistanceMap", "Object", preload("gddistanceMap.gd"),preload("res://icon.svg"))
 	pass
 
 
