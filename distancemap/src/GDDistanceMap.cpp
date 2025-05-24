@@ -179,290 +179,206 @@ GridType::Point nextStep(const GridType::Point& from, const GridType::Point& to)
     return nextPoint(from, dir);
 }
 
-int pickNum(int range, int rnd)
+// Forward declaration for RouteCtx if needed by getNextMove, though it's usually defined before.
+struct RouteCtx;
+
+// Function to get the next move, now with RouteCtx for state
+GridType::Point getNextMove(const GridToGraph::Graph& graph, GridType::Point& source, GridType::Point& target, RouteCtx* ctx)
 {
-    if (range <= 0) {
-        return 0;
-    }
-    // Use modulo to wrap `rnd` into the range [0, range-1]
-    return ((rnd % range) + range) % range;
-}
-
-// returns <EDGE_HALF (if edge halfway)> | <edgeIdx> 
-int getNextEdge(const GridType::Point& pos, std::vector<GridType::Edge> edges,
-    const GridType::Grid& infoGrid, const Routing::SparseGraph& routeGraph)
-{
-    std::cerr << "====GetNextEdge: " << pos.first << "," << pos.second << std::endl;
-	int edgeIdx = routeGraph.edgeGrid.get(pos.first, pos.second) & 0xffff;
-    int cell = infoGrid[pos.second][pos.first];
-    std::cerr << "   => edgeGrid: " << edgeIdx << " infoGrid:" << std::hex << cell << std::dec << std::endl;
-    if (cell & GridType::NODE) {
-        int n = cell & 0xffff;
-        const auto& connections = routeGraph.forward_adj[n];
-        const int idx = pickNum(connections.size(), pos.first ^ pos.second);
-        int edgeIdx = connections[idx].second;
-
-        std::cerr << "      AT NODE. cons: " << connections.size()
-    	<< " => idx:" << idx
-    	<< " => edge: " << edgeIdx << std::endl;
-        if (edges[edgeIdx].to == n) {
-            std::cerr << " node:" << n << " is edge TO node => HALFWAY" << std::endl;
-            edgeIdx |= GridType::EDGE_HALF;
-        }
-    }
-    std::cerr << "   => " << (edgeIdx & GridType::EDGE_HALF ? "H " : "  ") << (edgeIdx & GridType::EDGE_MASK) << std::endl;
-    return edgeIdx;
-}
-
-GridType::Point routeToNext(const GridToGraph::Graph& graph, const GridType::Point& source, const int srcEdgeIdx, const std::vector<int>& routeNodes)
-{
-    std::cerr << "##FIND ANGLE. edges:" << routeNodes.size() << std::endl;
-	std::cerr << "ROUTE: " << std::endl;
-    for (int n : routeNodes)
-    {
-        std::cerr << " " << n;
-    }
-	std::cerr << std::endl;
-
-	int srcCell = graph.infoGrid[source.second][source.first];
-	std::cerr << "  Source: " << source.first << "," << source.second << std::hex << " => " << srcCell << std::dec << std::endl;
-
-	bool incPath = false;
-	const auto& fromto = graph.routingGraph.edgeFromTos[srcEdgeIdx];
-	std::cerr << "Checking edge: " << fromto.first << "->" << fromto.second << std::endl;
-    if (srcCell & GridType::XPND) {
-		int dirIdx = GridType::get_XPND_DIR(srcCell);
-		GridType::Point dir = GridType::directions8[dirIdx];
-        std::cerr << "  XPND: Use idx: " << dirIdx << " for dir " << dir.first << "," << dir.second << std::endl;
-		return nextPoint(source, dir);
-    }
-    else if (fromto.first ==  routeNodes.front()) {
-        incPath = fromto.second == routeNodes[1];
-        std::cerr << (incPath? "increase " : "decrease") << " path dist to TOnode: " << fromto.second << std::endl;
-    }
-    else if (fromto.second ==  routeNodes.front()) {
-        incPath = ! fromto.first == routeNodes[1];
-        std::cerr << (incPath? "increase " : "decrease") << " path dist to FROMnode: " << fromto.first << std::endl;
-    }
-    else if (srcCell & GridType::EDGE) {
-		std::cout << "ERROR: " << source.first << "," << source.second << " on edge, but not start of path" << std::endl;
-		std::cerr << "ERROR: " << source.first << "," << source.second << " on edge, but not start of path" << std::endl;
-        incPath = (srcCell & GridType::EDGE_HALF);
-    }
-    else
-    {
-		std::cout << "ERROR: " << source.first << "," << source.second << " cell "
-			<< std::hex << srcCell << std::dec << ", but not start of path" << std::endl;
-		std::cerr << "ERROR: " << source.first << "," << source.second << " cell "
-			<< std::hex << srcCell << std::dec << ", but not start of path" << std::endl;
-    }
-
-    int edgeCell = graph.routingGraph.edgeGrid.get(source.first, source.second);
-	std::cerr << "  EdgeCell: " << std::hex << edgeCell << std::dec << std::endl;
-	int dist = edgeCell >> 16;
-	if (dist == 0)
-	{
-		if (routeNodes.size() == 1)
-		{
-			std::cout << "ERROR: " << source.first << "," << source.second << " edgeCell "
-				<< std::hex << edgeCell << std::dec << ", dist 0, but path = 1" << std::endl;
-			std::cerr << "ERROR: " << source.first << "," << source.second << " edgeCell "
-				<< std::hex << edgeCell << std::dec << ", dist 0, but path = 1" << std::endl;
-            return source;
-		}
-
-        std::cerr << "  DIST 0: Check next node " << routeNodes[1] << std::endl;
-		for (const auto& idx : graph.routingGraph.nodeToEdgeIdxs[routeNodes[1]])
-		{
-			const auto& ft = graph.routingGraph.edgeFromTos[idx];
-            const auto& path = graph.baseEdges[idx].path;
-			std::cerr << "  Node: " << routeNodes[1] << " gave edge:" << idx
-				<< " " << ft.first << "->" << ft.second << ". Check for that node" << std::endl;
-			if (ft.first == routeNodes[1]) {
-				std::cerr << "    => Found " << routeNodes[1] << " move forward" << std::endl;
-                return nextStep(path.front(), path[1]);
-			}
-			else if (ft.second == routeNodes[1]) {
-				std::cerr << "    => Found " << routeNodes[1] << " move backward" << std::endl;
-                return nextStep(path.back(), path[path.size() - 2]);
-            }
-		}
-        std::cout << "ERROR: " << source.first << "," << source.second << " edgeCell "
-            << std::hex << edgeCell << std::dec << ". At node, but no edge going to " << routeNodes[1] << std::endl;
-        std::cerr << "ERROR: " << source.first << "," << source.second << " edgeCell "
-            << std::hex << edgeCell << std::dec << ". At node, but no edge going to " << routeNodes[1] << std::endl;
-		return source;
-	}
-	const GridType::Edge& edge = graph.baseEdges[srcEdgeIdx];
-	dist = std::clamp(dist + (incPath ? 1 : -1), 0, static_cast<int>(edge.path.size() - 1));
-	auto movePnt = edge.path[dist];
-	std::cerr << "  Use " << (incPath ? "increased" : "decrease") << " dist path[" << dist << "] ="
-		<< movePnt.first << "," << movePnt.second << " move from: " << source.first<<","<<source.second << std::endl;
-
-    return nextStep(source,movePnt);
-}
-
-// Function to get the next move as an angle
-GridType::Point getNextMove(const GridToGraph::Graph& graph, GridType::Point& source, GridType::Point& target)
-{
+    // 1. Initial source and target validation (Boundary checks from previous version)
     int srcCell = graph.infoGrid[source.second][source.first];
-    if (srcCell & GridType::WALL)
-    {
-		if (srcCell & GridType::BOUNDARY) {
+    if (srcCell & GridType::WALL) {
+        if (srcCell & GridType::BOUNDARY) {
             int dirIdx = srcCell & GridType::DIR_MASK;
             source.first += GridType::directions8[dirIdx].first;
             source.second += GridType::directions8[dirIdx].second;
-            std::cerr << source.first << "," << source.second << " DIR: " << dirIdx << std::endl;
+            std::cerr << "Adjusted source from BOUNDARY: (" << source.first << "," << source.second << ") DIR: " << dirIdx << std::endl;
+            srcCell = graph.infoGrid[source.second][source.first]; // Re-read cell info
         }
-
-        if (graph.infoGrid[source.second][source.first] & GridType::WALL) {
-            std::cout << "ERROR: " << source.first << "," << source.second << " is WALL: SRC ***************************" << std::endl;
-            std::cerr << "ERROR: " << source.first << "," << source.second << " is WALL: SRC ***************************" << std::endl;
-			return source;
+        if (srcCell & GridType::WALL) { // Check again after adjustment
+            std::cerr << "ERROR: Source (" << source.first << "," << source.second << ") is WALL." << std::endl;
+            return source; 
         }
     }
 
     int tgtCell = graph.infoGrid[target.second][target.first];
-    if (tgtCell & GridType::WALL)
-    {
-		if (tgtCell & GridType::BOUNDARY) {
-            std::cerr << "MOVED TARGET " << target.first << "," << target.second << " => ";
+    if (tgtCell & GridType::WALL) {
+        if (tgtCell & GridType::BOUNDARY) {
             int dirIdx = tgtCell & GridType::DIR_MASK;
             target.first += GridType::directions8[dirIdx].first;
             target.second += GridType::directions8[dirIdx].second;
-            std::cerr << target.first << "," << target.second << " DIR: " << dirIdx << std::endl;
+            std::cerr << "Adjusted target from BOUNDARY: (" << target.first << "," << target.second << ") DIR: " << dirIdx << std::endl;
+            tgtCell = graph.infoGrid[target.second][target.first]; // Re-read cell info
         }
-
-        if (graph.infoGrid[target.second][target.first] & GridType::WALL) {
-            std::cout << "ERROR: " << target.first << "," << target.second << " is WALL: TARG ***************************" << std::endl;
-            std::cerr << "ERROR: " << target.first << "," << target.second << " is WALL: TARG ***************************" << std::endl;
-			return source;
+        if (tgtCell & GridType::WALL) { // Check again after adjustment
+            std::cerr << "ERROR: Target (" << target.first << "," << target.second << ") is WALL." << std::endl;
+            return source; 
         }
     }
 
-    // Check all the levels and find the level at which the zones are adjacent
-    // - Not sure if could do top down search, I *think* it's possible to be
-    // (say) adjacent at level 2, but same at level 1, because zones are any shape
-    int zoneSame = -1;
-    int zoneAdj = -1;
-    for (int levelIdx=0; levelIdx < graph.abstractLevels.size(); ++levelIdx)
-    {
-        const auto& ablv = graph.abstractLevels[levelIdx];
-        const auto& targetZone = ablv.zoneGrid[target.second][target.first].closestAbstractNodeIdx;
-        const auto& sourceZone = ablv.zoneGrid[source.second][source.first].closestAbstractNodeIdx;
-        std::cerr << "LEVL: " << levelIdx << " src abNode: " << sourceZone << " dst abNode:" << targetZone << std::endl;
-        // Check if in same zone for this level
-        if (zoneSame == -1 && targetZone == sourceZone)
-        {
-            zoneSame = levelIdx;
-            std::cerr << "==Zone Same: " << zoneSame << std::endl;
-            continue;
+    // 2. Target Moved Check
+    // Compare the current 'target' (passed from getMove) with 'ctx->to' (target for which the path was computed).
+    bool targetHasMoved = manhattanDistance(target, ctx->to) > 0;
+    if (targetHasMoved) {
+        std::cerr << "Target has moved. Old path target: (" << ctx->to.first << "," << ctx->to.second 
+                  << "), New current target: (" << target.first << "," << target.second << "). Clearing path." << std::endl;
+        ctx->currentPath.clear();
+        ctx->currentPathIndex = 0;
+        ctx->to = target; // Update path target to the new current target
+    }
+
+    // 3. Path Initialization or Re-computation
+    // Recompute if path is empty, index is out of bounds, OR if the target has moved (forcing replan for new target)
+    if (ctx->currentPath.empty() || ctx->currentPathIndex >= ctx->currentPath.size() || targetHasMoved) {
+        std::cerr << "Path empty, index out of bounds, or target moved. Source: (" << source.first << "," << source.second
+                  << ") Current Target: (" << target.first << "). Recomputing." << std::endl;
+        ctx->currentPath.clear();
+        ctx->currentPathIndex = 0;
+        // Ensure ctx->to reflects the target we are NOW pathfinding for.
+        // This is crucial if targetHasMoved was false, but path was empty for other reasons.
+        ctx->to = target; 
+
+
+        int sourceEdgeIdx = graph.routingGraph.edgeGrid.get(source.first, source.second) & 0x7FFF;
+        int targetEdgeIdx = graph.routingGraph.edgeGrid.get(target.first, target.second) & 0x7FFF;
+        
+        std::cerr << "  Source Point: (" << source.first << "," << source.second << ") -> Source Edge Idx: " << sourceEdgeIdx << std::endl;
+        std::cerr << "  Target Point: (" << target.first << "," << target.second << ") -> Target Edge Idx: " << targetEdgeIdx << std::endl;
+
+        // Validate sourceEdgeIdx
+        if (sourceEdgeIdx == 0x7FFF || sourceEdgeIdx >= graph.routingGraph.edgeFromTos.size()) {
+            std::cerr << "  ERROR: Invalid sourceEdgeIdx: " << sourceEdgeIdx 
+                      << " (max valid: " << (graph.routingGraph.edgeFromTos.empty() ? -1 : (int)graph.routingGraph.edgeFromTos.size() - 1) 
+                      << "). Cannot pathfind." << std::endl;
+            return source; 
+        }
+        // Validate targetEdgeIdx
+        if (targetEdgeIdx == 0x7FFF || targetEdgeIdx >= graph.routingGraph.edgeFromTos.size()) {
+            std::cerr << "  ERROR: Invalid targetEdgeIdx: " << targetEdgeIdx 
+                      << " (max valid: " << (graph.routingGraph.edgeFromTos.empty() ? -1 : (int)graph.routingGraph.edgeFromTos.size() - 1) 
+                      << "). Cannot pathfind." << std::endl;
+            return source; 
         }
 
-        // Check if target is one of the source neighbors
-        for (int adjZone : ablv.zones[sourceZone].adjacentZones)
-        {
-            if (adjZone == targetZone)
-            {
-                zoneAdj = levelIdx;
-				std::cerr << "==Zone ADJ: " << zoneAdj << std::endl;
-                break;
+        std::vector<int> zoneBases;
+        for (size_t i = 0; i < graph.routingGraph.nodePoints.size(); ++i) {
+            zoneBases.push_back(i);
+        }
+        std::vector<int> zoneEdges;
+        for (size_t i = 0; i < graph.routingGraph.edgeFromTos.size(); ++i) {
+            zoneEdges.push_back(i);
+        }
+        
+        // Ensure source/target are not walls before pathfinding
+        if ((graph.infoGrid[source.second][source.first] & GridType::WALL) || 
+            (graph.infoGrid[target.second][target.first] & GridType::WALL)) { // 'target' here is the current frame's target
+            std::cerr << "  Cannot pathfind: source or current target is a wall after adjustments." << std::endl;
+            return source;
+        }
+
+        ctx->currentPath = Routing::findZonePath(graph.routingGraph, zoneBases, zoneEdges, sourceEdgeIdx, targetEdgeIdx);
+        
+        // Associate the computed path with the target it was computed for.
+        // This is important because 'target' (the parameter) might change frame to frame.
+        // 'ctx->to' should always reflect the target of 'ctx->currentPath'.
+        if (!ctx->currentPath.empty()) {
+             ctx->to = target; // Path is for the 'target' it was just computed with.
+             std::cerr << "  Path found with " << ctx->currentPath.size() << " points for target (" 
+                       << ctx->to.first << "," << ctx->to.second << "). First point: ("
+                       << ctx->currentPath[0].first << "," << ctx->currentPath[0].second << ")" << std::endl;
+
+            // 3.1 Path Validation: Check if any point on the new path is a wall
+            bool newPathIsWallFree = true;
+            for (const auto& pathPoint : ctx->currentPath) {
+                if (!isValidGridPoint(graph.infoGrid, pathPoint) || (graph.infoGrid[pathPoint.second][pathPoint.first] & GridType::WALL)) {
+                    std::cerr << "  New path validation FAILED: point (" << pathPoint.first << "," << pathPoint.second
+                              << ") is a wall or invalid." << std::endl;
+                    newPathIsWallFree = false;
+                    break;
+                }
             }
+            if (!newPathIsWallFree) {
+                ctx->currentPath.clear();
+                ctx->currentPathIndex = 0;
+                // ctx->to remains as the 'target' we attempted to path to, so next frame, if target hasn't changed, we might retry.
+                std::cerr << "  New path invalidated due to containing a wall." << std::endl;
+                return source; // Stay put
+            }
+            std::cerr << "  New path validated successfully (all points are floor)." << std::endl;
+        } else {
+            std::cerr << "  No path found from edge " << sourceEdgeIdx << " to edge " << targetEdgeIdx 
+                      << " for target (" << target.first << "," << target.second << ")." << std::endl;
+            // If no path, ctx->to still holds the target we failed to path to.
+            // If target changes next frame, targetHasMoved will be true.
+            // If target doesn't change, we'll retry pathing to same ctx->to.
+            return source; 
         }
-        // If found adjacent then we have the lowest level that they are adjacent
-        if (zoneAdj != -1)
-        {
-            break;
+    }
+
+    // 4. Path Following
+    if (!ctx->currentPath.empty() && ctx->currentPathIndex < ctx->currentPath.size()) {
+        GridType::Point nextNodeOnPath = ctx->currentPath[ctx->currentPathIndex];
+        std::cerr << "Following path. Index: " << ctx->currentPathIndex << ", Attempting to move to: ("
+                  << nextNodeOnPath.first << "," << nextNodeOnPath.second << ")" << std::endl;
+
+        if (isValidGridPoint(graph.infoGrid, nextNodeOnPath) &&
+            (graph.infoGrid[nextNodeOnPath.second][nextNodeOnPath.first] & GridType::WALL)) {
+            std::cerr << "  WARN: Next point on path (" << nextNodeOnPath.first << "," << nextNodeOnPath.second
+                      << ") is a wall. Attempting local adjustment from source (" 
+                      << source.first << "," << source.second << ")." << std::endl;
+
+            GridType::Point bestNeighbor = source;
+            int minDistanceToTarget = manhattanDistance(source, target); // Current distance if no move
+            bool foundAdjustment = false;
+
+            for (const auto& dir : GridType::directions8) {
+                GridType::Point neighbor = {source.first + dir.first, source.second + dir.second};
+                if (isValidGridPoint(graph.infoGrid, neighbor) &&
+                    !(graph.infoGrid[neighbor.second][neighbor.first] & GridType::WALL)) {
+                    
+                    int distToTarget = manhattanDistance(neighbor, target);
+                    // Prefer neighbors that make progress towards the target
+                    if (distToTarget < minDistanceToTarget) {
+                        minDistanceToTarget = distToTarget;
+                        bestNeighbor = neighbor;
+                        foundAdjustment = true;
+                    } else if (!foundAdjustment && distToTarget == minDistanceToTarget) { 
+                        // If no better option found yet, take one that's same distance
+                        // (could be a side step to get unstuck)
+                        bestNeighbor = neighbor;
+                        foundAdjustment = true;
+                    }
+                }
+            }
+
+            if (foundAdjustment && (bestNeighbor.first != source.first || bestNeighbor.second != source.second) ) {
+                std::cerr << "  Local adjustment: Moving to neighbor (" << bestNeighbor.first << "," << bestNeighbor.second 
+                          << ") instead of blocked path point. Path preserved." << std::endl;
+                // Path index is NOT incremented; we took a detour.
+                // The next call will re-evaluate from bestNeighbor.
+                return bestNeighbor;
+            } else {
+                std::cerr << "  No suitable non-wall neighbor found for local adjustment or no progress possible. Clearing path." << std::endl;
+                ctx->currentPath.clear();
+                ctx->currentPathIndex = 0;
+                return source; // Stay put, force replan
+            }
+        } else if (!isValidGridPoint(graph.infoGrid, nextNodeOnPath)) {
+             std::cerr << "  ERROR: Next point on path (" << nextNodeOnPath.first << "," << nextNodeOnPath.second
+                      << ") is outside grid boundaries. Clearing path." << std::endl;
+            ctx->currentPath.clear();
+            ctx->currentPathIndex = 0;
+            return source; 
         }
+
+
+        // If nextNodeOnPath is valid and not a wall
+        ctx->currentPathIndex++;
+        return nextNodeOnPath;
     }
 
-    // Check if found adjacent zones
-    if (zoneAdj != -1) {
-        const auto& ablv = graph.abstractLevels[zoneAdj];
-        const auto& sourceZone = ablv.zoneGrid[source.second][source.first].closestAbstractNodeIdx;
-        const auto& targetZone = ablv.zoneGrid[target.second][target.first].closestAbstractNodeIdx;
-        const auto& subgrid = ablv.subGrids[sourceZone];
-        uint16_t sub = subgrid.getCostFlow(source.first, source.second, subgrid.getFlow(targetZone));
-        const auto& dir = GridType::directions8[sub & 0xff];
-		std::cerr << "  ADJ => sZ:" << sourceZone << " tZ: " << targetZone << " sub: " << std::hex << sub << std::dec
-			<< " => dir: " << dir.first << "," << dir.second << std::endl;
-        return nextPoint(source, dir);
-
-    }
-    // No adjacent, check if found same zone
-    int sourceEdge = -1;
-    int targetEdge = -1;
-    int levelIdx = -1;
-    int zoneIdx = -1;
-    if (zoneSame != -1) {
-        levelIdx = zoneSame;
-        const auto& ablv = graph.abstractLevels[levelIdx];
-        zoneIdx = ablv.zoneGrid[source.second][source.first].closestAbstractNodeIdx;
-
-        const auto& infoGrid = graph.infoGrid;
-
-        // If on XPND then move towards edge
-		int srcCell = infoGrid[source.second][source.first];
-		if (srcCell & GridType::XPND) {
-            int dirIdx = GridType::get_XPND_DIR(srcCell);
-            GridType::Point dir = GridType::directions8[dirIdx];
-			std::cerr << "  SAME src SRC => xy:" << source.first<<","<<source.second
-			<< " cell:" << std::hex << srcCell << std::dec <<" dir:" << dirIdx
-			<< " => " << dir.first << "," << dir.second << std::endl;
-            return nextPoint(source, dir);
-		}
-
-        // If not on EDGE then move towards edge path
-        // Get the edges to route from/to and get the route
-        sourceEdge = getNextEdge(source, graph.baseEdges, graph.infoGrid, graph.routingGraph);
-        targetEdge = getNextEdge(target, graph.baseEdges, graph.infoGrid, graph.routingGraph);
-        std::cerr << "  SAME => Route: " << sourceEdge << " to " << targetEdge << std::endl;
-		// if both on the edge then move towards target
-		if ((sourceEdge & GridType::EDGE_MASK) == (targetEdge&GridType::EDGE_MASK))
-		{
-            std::cerr << "ROUTE: SAME EDGE: " << (sourceEdge & GridType::EDGE_MASK) << std::endl;
-			const auto& sourcePath = graph.baseEdges[sourceEdge & GridType::EDGE_MASK].path;
-            int sourceDist = graph.routingGraph.edgeGrid.get(source.first,source.second) >> 16;
-            int targetDist = graph.routingGraph.edgeGrid.get(target.first,target.second) >> 16;
-            std::cerr << "  => sourceDist: " << sourceDist << " targetDist: " << targetDist << std::endl;
-            sourceDist += (sourceDist < targetDist) ? 1 : -1;
-            std::cerr << "  => Path[" << sourceDist << "] = "
-                << sourcePath[sourceDist].first << ","<< sourcePath[sourceDist].second << std::endl;
-			return nextStep(source, sourcePath[sourceDist]);
-		}
-	}
-	// Use last Abstract Level to route.
-    else
-    {
-        std::cerr << "  LAST zone" << std::endl;
-        levelIdx = graph.abstractLevels.size() - 1;
-        const auto& ablv = graph.abstractLevels[levelIdx];
-        zoneIdx = ablv.zoneGrid[source.second][source.first].closestAbstractNodeIdx;
-		const auto& sourceInfo = ablv.zones[zoneIdx];
-        sourceEdge = getNextEdge(source, graph.baseEdges, graph.infoGrid, graph.routingGraph);
-
-        GridType::AbstractNode abNode = ablv.abstractNodes[zoneIdx];
-
-        std::cerr << "    Use zone: " << zoneIdx << " baseNode:" << abNode.baseCenterNode << " to find edge" << std::endl;
-        const GridType::Point& targetPos = graph.baseNodes[abNode.baseCenterNode];
-        targetEdge = getNextEdge(targetPos, graph.baseEdges, graph.infoGrid, graph.routingGraph);
-    }
-	// Use the source and target edges to get a route
-    int srcEdgeIdx = (sourceEdge & GridType::EDGE_MASK);
-    int dstEdgeIdx = (targetEdge & GridType::EDGE_MASK);
-    std::cerr << "MOVE: zoneLevel: " << levelIdx << " zoneIndex: " << zoneIdx
-        << " srcEdge:" << srcEdgeIdx << " (" << graph.baseEdges[srcEdgeIdx].from << " -> " << graph.baseEdges[srcEdgeIdx].to << ")" 
-        << " dstEdge:" << dstEdgeIdx << " (" << graph.baseEdges[dstEdgeIdx].from << " -> " << graph.baseEdges[dstEdgeIdx].to << ")"
-        << std::endl;
-
-	const auto& ablv = graph.abstractLevels[levelIdx];
-	const auto& sourceInfo = ablv.zones[zoneIdx];
-
-	const auto& zoneBases = sourceInfo.baseNodeIdxs;
-	const auto& zoneEdges = sourceInfo.baseEdgeIdxs;
-	const auto routeNodes = Routing::findZonePath(graph.routingGraph,
-		zoneBases, zoneEdges, srcEdgeIdx, dstEdgeIdx);
-	return routeToNext(graph, source, srcEdgeIdx, routeNodes);
+    std::cerr << "Path ended or invalid state. Current source: (" << source.first << "," << source.second << ")" << std::endl;
+    return source; // Fallback
 }
 
 int directionToDegrees(const GridType::Point p) {
@@ -484,10 +400,12 @@ int directionToDegrees(const GridType::Point p) {
 }
 struct RouteCtx {
 	GridType::Point from;
-	GridType::Point to;
-	GridType::Point next;
+	GridType::Point to;       // Target point for the current path
+	GridType::Point next;     // Next immediate step to take
 	int type;
     float curDir;
+    GridType::Path currentPath; // Stores the list of points (cell coordinates) for the current path
+    int currentPathIndex = 0;   // Index of the next point to take in currentPath
 };
 
 static void untrack_cb(godot::Node* id, void* ctx) {
@@ -507,27 +425,53 @@ float GDDistanceMap::getMove(godot::Node* id, godot::Vector2 from, godot::Vector
     std::cerr << "tracker:" << pTracker << " ID:" << id << " CTX = " << ctx << std::endl;
 
     if (!ctx) {
-		std::cerr << "===CREATE CONTEXT" << std::endl;
+		std::cerr << "===CREATE CONTEXT for ID: " << id << std::endl;
 		ctx = new RouteCtx();
+        ctx->from = fromPnt;
+        ctx->to = toPnt;     // Initialize to the initial target
+        ctx->next = fromPnt; // Start by assuming 'next' is current position
+        ctx->type = type;
+        ctx->currentPath.clear();
+        ctx->currentPathIndex = 0;
         pTracker->setContext<RouteCtx>(id, ctx);
-		std::cerr << "===ADD CALLBACK" << std::endl;
+		std::cerr << "===ADD CALLBACK for new context" << std::endl;
         pTracker->set_untrack_callback(untrack_cb);
     }
-    else if (ctx->type == type) {
-		if (fromPnt.first != ctx->next.first || fromPnt.second != ctx->next.second) {
-		    std::cerr << "===REUSED DIR " << ctx->curDir << std::endl;
-            return ctx->curDir;
-		}
+
+    // Always update context with current dynamic values from this frame
+    ctx->from = fromPnt;
+    // REMOVED: ctx->to = toPnt; 
+    // 'ctx->to' now specifically means the target for which 'ctx->currentPath' was generated.
+    // 'toPnt' (current frame's target) is passed directly to getNextMove.
+    ctx->type = type;
+
+
+    // Caching Logic:
+    // If the entity is not at the `ctx->next` point (which was determined in a *previous* call to getMove/getNextMove),
+    // it means the entity is still in transit towards that `ctx->next`. So, reuse `ctx->curDir`.
+    // `getNextMove` will handle path invalidation if `toPnt` (the ultimate target) changes significantly.
+    if (ctx->type == type && (fromPnt.first != ctx->next.first || fromPnt.second != ctx->next.second)) {
+        std::cerr << "Entity at (" << fromPnt.first << "," << fromPnt.second
+                  << ") has not reached previous ctx->next (" << ctx->next.first << "," << ctx->next.second
+                  << "). Reusing curDir: " << ctx->curDir << " to reach it." << std::endl;
+        return ctx->curDir;
     }
+    // If we are here, it means fromPnt == ctx->next (or it's the first call for a new context).
+    // We need to determine the *new* ctx->next.
 
-	ctx->from = fromPnt;
-    ctx->to = toPnt;
-	ctx->type = type;
+	std::cerr << "===GETMOVE: Current (" << fromPnt.first << "," << fromPnt.second 
+              << ") Target (" << toPnt.first << "," << toPnt.second 
+              << ") PathIdx: " << ctx->currentPathIndex << " PathSize: " 
+              << (ctx->currentPath.empty() ? 0 : ctx->currentPath.size()) << std::endl;
+    
+    // Pass the current `toPnt` as the target for `getNextMove`.
+    // `ctx->to` was updated above and `getNextMove` will use that for its internal logic.
+    ctx->next = getNextMove(graph, fromPnt, toPnt, ctx);
 
-	std::cerr << "===GETMOVE: " << fromPnt.first << "," << fromPnt.second << " TO " << toPnt.first << "," << toPnt.second << std::endl;
-    ctx->next = getNextMove(graph, fromPnt, toPnt);
+    // The angle should be from the current position (ctx->from) to the newly determined next step (ctx->next)
 	ctx->curDir = computeAngle(ctx->next.first - ctx->from.first, ctx->next.second - ctx->from.second);
-	std::cerr << "##ANG to: " << ctx->next.first <<"," << ctx->next.second << " = " << ctx->curDir << std::endl;
+	std::cerr << "##ANG from (" << ctx->from.first << "," << ctx->from.second << ") to ctx->next: ("
+              << ctx->next.first <<"," << ctx->next.second << ") = " << ctx->curDir << std::endl;
 	return ctx->curDir;
 }
 
