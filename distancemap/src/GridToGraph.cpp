@@ -15,6 +15,8 @@
 #include <limits>
 #include <map>
 #include <set>
+#include <future>
+#include <thread>
 
 #include "GridToGraph.hpp"
 
@@ -696,7 +698,7 @@ class EdgeAdder {
     std::set<Edge, EdgeComparator> edges;
 
 	const Grid& grid;
-	std::set<std::pair<int, int>> adjacentNodePairs;
+	std::unordered_set<std::pair<int, int>, GridType::PairHash> adjacentNodePairs;
 
 public:
 	EdgeAdder(const Grid& g)
@@ -843,19 +845,20 @@ Path followPath(int startX, int startY,
         {1, 1}     // diag down-right
     };
 
-    // We'll keep a copy of 'visited' to revert if needed
-    std::vector<std::vector<bool>> tempVisited = visited;
+    // Create a local copy of visited_main. This copy will be used for all attempts within this function call.
+    // Marks on this local_visited persist across different directional attempts within this single call to followPath.
+    std::vector<std::vector<bool>> local_visited = visited; 
 
-    // Helper: Mark a PATH cell visited in tempVisited
-    auto markPathVisited = [&](int x, int y) {
-        tempVisited[y][x] = true;
+    // Helper: Mark a PATH cell in local_visited
+    auto markPathVisitedThisAttempt = [&](int x, int y) {
+        if (isPath(grid[y][x]) && !local_visited[y][x]) {
+            local_visited[y][x] = true;
+        }
     };
-
-    // If the start cell is PATH, mark it visited in the temp array
-    if ( (grid[startY][startX] != 0)    // not empty
-         && ((grid[startY][startX] & (NODE|DEND)) == 0) ) // i.e., it's PATH
-    {
-        markPathVisited(startX, startY);
+    
+    // If the starting cell itself is a path cell, mark it in our local_visited context.
+    if (isPath(grid[startY][startX])) {
+         local_visited[startY][startX] = true;
     }
 
     // =========================
@@ -863,158 +866,165 @@ Path followPath(int startX, int startY,
     // =========================
     for (auto [dx, dy] : directionsHVD)
     {
+        std::deque<Point> current_forwardPath_dq; // Renamed to avoid confusion
+        std::deque<Point> current_backwardPath_dq; // Renamed
+
         int nx = startX + dx;
         int ny = startY + dy;
 
-        // Skip empty or visited path cells
-        if (grid[ny][nx] == 0) continue;   // EMPTY
-        if (isPath(grid[ny][nx]) && tempVisited[ny][nx])
+        if (!isInBounds(nx, ny, grid.size(), grid[0].size()) || grid[ny][nx] == EMPTY) continue;
+        if (isPath(grid[ny][nx]) && local_visited[ny][nx]) // Use local_visited
         {
         	std::cerr << "  " << nx<<","<<ny<< " => Visited (or Node" << std::endl;
-        	continue; // Already visited path cell
+        	continue; 
         }
 
         // FORWARD PATH: from neighbor
-        std::deque<std::pair<int,int>> forwardPath;
-        std::pair<int,int> fwd = {nx, ny};
+        Point fwd = {nx, ny};
         std::cerr << "  => FWD Start " << fwd.first <<"," << fwd.second << std::endl;
 
         while (true)
         {
-            // If it's a PATH cell, mark visited
-            if (isPath(grid[fwd.second][fwd.first]) && !tempVisited[fwd.second][fwd.first])
-            {
-                markPathVisited(fwd.first, fwd.second);
-                std::cerr << "    VISIT " << fwd.first <<"," << fwd.second << std::endl;
-            }
+            markPathVisitedThisAttempt(fwd.first, fwd.second); // Use new helper
+            current_forwardPath_dq.push_back(fwd);
 
-            forwardPath.push_back(fwd);
-
-            // If we reached a node, check if it's the same node or a new one
             if ( isNode(grid[fwd.second][fwd.first]) ) {
-                // If it's literally the same node as (startX, startY), skip it
                 if (fwd.first == startX && fwd.second == startY) {
-                    // This forward direction loops back to the start node => break/fail
-                    // We'll try the next direction
-                	for (const auto p : forwardPath) {
-                		if (isPath(grid[p.second][p.first])) tempVisited[p.second][p.first] = false;
-                	}
-                    forwardPath.clear();
+                    // Attempt to unmark only if necessary, though current logic just clears dq
+                    // This unmarking is complex if not careful. The original didn't unmark specific cells from tempVisited for this case.
+                    current_forwardPath_dq.clear(); // Invalid path
                     std::cerr << "    LOOP => clear path" << std::endl;
                 }
                 std::cerr << "  NODE " << fwd.first <<"," << fwd.second << " => BREAK" << std::endl;
                 break;
             }
 
-            // Try directions8 again in HVD order from 'fwd'
             bool foundNext = false;
             for (auto [dx2, dy2] : directionsHVD) {
                 int fx = fwd.first + dx2;
                 int fy = fwd.second + dy2;
 
-                // Skip empty or visited path
-                if (grid[fy][fx] == 0) continue;
-                if (isPath(grid[fy][fx]) && tempVisited[fy][fx]) continue;
+                if (!isInBounds(fx, fy, grid.size(), grid[0].size()) || grid[fy][fx] == EMPTY) continue;
+                if (isPath(grid[fy][fx]) && local_visited[fy][fx]) continue; // Use local_visited
                 std::cerr << "    " << fx << "," << fy << " => Not visited (or is Node) => BREAK" << std::endl;
-                // We found an unvisited path or a node => move forward
                 fwd = {fx, fy};
                 foundNext = true;
                 break;
             }
             if (!foundNext) {
-                // Could not proceed to any next cell => path fails
-                std::cerr << "  NOT FOUND => clear: ";
-                for (const auto p : forwardPath) { std::cerr << p.first <<","<< p.second << "  "; }
-                std::cerr << std::endl;
-                forwardPath.clear();
+                current_forwardPath_dq.clear();
+                std::cerr << "  NOT FOUND => clear FWD path" << std::endl;
                 break;
             }
         }
 
-        // If forwardPath is empty => that direction failed, try next direction
-        if (forwardPath.empty()) {
-        	std::cerr << "  EMPTY => Continue" << std::endl;
+        if (current_forwardPath_dq.empty()) {
+            std::cerr << "  FWD EMPTY => Continue" << std::endl;
             continue;
         }
 
         // BACKWARD PATH: from (startX, startY)
-        std::deque<std::pair<int,int>> backwardPath;
-        std::pair<int,int> bck = {startX, startY};
-
+        Point bck = {startX, startY};
+        // startX,startY (if path cell) was already marked in local_visited before this HVD loop.
+        
+        std::cerr << "  => BCK Start " << bck.first <<"," << bck.second << std::endl;
         while (true)
         {
-        	std::cerr << "  BCK " << bck.first <<","<< bck.second << std::endl;
-            // If it's PATH, mark visited
-            if (((grid[bck.second][bck.first] & (NODE|DEND)) == 0) // is PATH
-                && !tempVisited[bck.second][bck.first])
-            {
-                markPathVisited(bck.first, bck.second);
-                std::cerr << "    VISIT " << bck.first <<"," << bck.second << std::endl;
-            }
+            // Mark current `bck` point if it's a path cell and not yet marked in `local_visited`.
+            // This is important if bck moves from the initial (startX,startY).
+            markPathVisitedThisAttempt(bck.first, bck.second); 
+            current_backwardPath_dq.push_front(bck);
 
-            backwardPath.push_front(bck);
-
-            // If we reached a node, we stop
-            if ((grid[bck.second][bck.first] & (NODE|DEND)) != 0) {
-                std::cerr << "    NODE => break" << std::endl;
+            if (isNode(grid[bck.second][bck.first])) {
+                std::cerr << "    NODE " << bck.first << "," << bck.second << " => BREAK" << std::endl;
                 break;
             }
 
             bool foundNext = false;
             for (auto [dx2, dy2] : directionsHVD) {
-            	// NOTE: subtract the dir to check dirs in opposite directions8 to forward
-                int bx = bck.first - dx2;
-                int by = bck.second - dy2;
-                if (grid[by][bx] == 0) continue; // empty
-                if (isPath(grid[by][bx]) && tempVisited[by][bx]) continue;
+                // Original logic used -dx2, -dy2. Sticking to generic exploration relies on local_visited.
+                int bx = bck.first + dx2; 
+                int by = bck.second + dy2;
+
+                if (!isInBounds(bx, by, grid.size(), grid[0].size()) || grid[by][bx] == EMPTY) continue;
+
+                // Prevent backward path from immediately stepping onto the first point of forward path,
+                // if backward path is just starting (size 1, i.e. bck is startX,startY)
+                // and forward path exists.
+                if (current_backwardPath_dq.size() == 1 && !current_forwardPath_dq.empty() && 
+                    bx == current_forwardPath_dq.front().first && by == current_forwardPath_dq.front().second) {
+                    continue;
+                }
+
+                if (isPath(grid[by][bx]) && local_visited[by][bx]) continue; // Use local_visited
 
                 bck = {bx, by};
+                // markPathVisitedThisAttempt for `bck` is done at the start of the loop.
+                std::cerr << "    " << bx<<","<<by << " => Found next BCK" << std::endl;
                 foundNext = true;
-                std::cerr << "    " << bx<<","<<by << " => Found next" << std::endl;
                 break;
             }
             if (!foundNext) {
-                for (const auto p : backwardPath) { std::cerr << p.first <<","<< p.second << "  "; }
-                std::cerr << std::endl;
-                // Could not proceed => path fails
-                backwardPath.clear();
-                std::cerr << "    BCK NOT FOUND => clear" << std::endl;
+                current_backwardPath_dq.clear();
+                 std::cerr << "  NOT FOUND => clear BCK path" << std::endl;
                 break;
             }
         }
 
-        // If backward path is empty => that direction fails, revert & try next
-        if (backwardPath.empty()) {
-        	std::cerr << "  BCK EMPTY => CONTINUE" << std::endl;
+        if (current_backwardPath_dq.empty()) {
+            std::cerr << "  BCK EMPTY => CONTINUE" << std::endl;
             continue;
         }
 
-        // If we get here, we have forward + backward paths => combine them
-        // They share the start cell once, but typically that's okay.
-		Path result;
-        for (auto& p : backwardPath) {
-            result.push_back(p);
+		Path combined_path; // Renamed from 'result' to avoid confusion
+        for (const auto& p : current_backwardPath_dq) {
+            combined_path.push_back(p);
         }
-        for (auto& p : forwardPath) {
-            result.push_back(p);
+        // Simple concatenation, relying on simplifyPath later.
+        // Avoid duplicating the connection point if backward path's last point is forward path's first point.
+        bool processed_fwd_first = false;
+        if (!current_backwardPath_dq.empty() && !current_forwardPath_dq.empty() &&
+            current_backwardPath_dq.back() == current_forwardPath_dq.front()) {
+            for (size_t i = 1; i < current_forwardPath_dq.size(); ++i) { // Start from 1 to skip duplicate
+                combined_path.push_back(current_forwardPath_dq[i]);
+            }
+            processed_fwd_first = true;
+        }
+        if (!processed_fwd_first) { // If no overlap or one path was empty initially
+             for (const auto& p : current_forwardPath_dq) {
+                combined_path.push_back(p);
+            }
         }
 
-        // We have a valid path => commit changes to 'visited'
-        if (edgeAdder.addEdge(result)) {
-        	visited = tempVisited;
-        	return result;
+
+        if (combined_path.size() < 2) {
+             std::cerr << "  COMBINED PATH TOO SHORT (<2) => Continue" << std::endl;
+            continue;
         }
-		tempVisited = visited; // Revert changes
-		std::cerr << "  ADD EDGE FAILED => Revert" << std::endl;
-        //return emptyPath;
+        if (!isNode(grid[combined_path.front().second][combined_path.front().first]) ||
+            !isNode(grid[combined_path.back().second][combined_path.back().first])) {
+            std::cerr << "  COMBINED PATH DOES NOT START/END WITH NODE => Continue" << std::endl;
+            continue;
+        }
+        
+        Path mutable_combined_path = combined_path; // Pass a mutable copy to addEdge
+        if (edgeAdder.addEdge(mutable_combined_path)) {
+            // On success, copy the accumulated local_visited (which includes marks from this successful path)
+            // to the main visited array. This is ONE copy operation per successful followPath.
+        	visited = local_visited; 
+        	return mutable_combined_path; // Return the (potentially simplified) path
+        }
+        // If addEdge failed, the marks in local_visited from this attempt persist.
+        // This prevents re-trying already explored segments within this same followPath call.
+        // No "tempVisited = visited;" revert line.
+		std::cerr << "  ADD EDGE FAILED (e.g. duplicate/invalid)" << std::endl;
     }
 
-    // If no direction yields a path, revert everything and return empty
-    return emptyPath;
+    return emptyPath; // No new edge found and added after trying all directions
 }
 
 
-std::vector<Edge> findEdges(const std::vector<std::vector<int>>& grid,
+std::vector<Edge> findEdges(const Grid& grid,
                             const std::vector<Point>& nodes,
                             const std::vector<Point>& deadEnds)
 {
@@ -1255,33 +1265,86 @@ static std::vector<int> dbscan(const std::vector<Point>& points, double eps, int
     std::vector<int> labels(points.size(), UNVISITED);
     int clusterId = 0;
 
-    auto regionQuery = [&](const Point& p) -> std::vector<int> {
-        std::vector<int> neighbors;
-        for (size_t i = 0; i < points.size(); ++i) {
-            if (euclideanDistance(p, points[i]) <= eps) {
-                neighbors.push_back(i);
-            }
+    auto regionQuery = [&](const Point& p_target) -> std::vector<int> {
+        std::vector<int> all_neighbors;
+        const size_t n_points = points.size();
+
+        if (n_points == 0) {
+            return all_neighbors;
         }
-        return neighbors;
+
+        unsigned int num_threads = std::thread::hardware_concurrency();
+        if (num_threads == 0) {
+            num_threads = 2; // Default to 2 threads if hardware_concurrency returns 0
+        }
+        // Avoid too many threads for small datasets
+        if (n_points < num_threads * 4) { // Heuristic: ensure at least 4 points per thread
+            num_threads = 1;
+        }
+        
+        std::vector<std::future<std::vector<int>>> futures;
+        futures.reserve(num_threads);
+
+        size_t chunk_size = n_points / num_threads;
+        size_t remainder = n_points % num_threads;
+
+        for (unsigned int i = 0; i < num_threads; ++i) {
+            size_t start_idx = i * chunk_size + std::min((size_t)i, remainder);
+            size_t end_idx = start_idx + chunk_size + (i < remainder ? 1 : 0);
+            
+            if (start_idx == end_idx) continue; // Skip empty chunks
+
+            futures.emplace_back(std::async(std::launch::async, 
+                [&points, p_target, eps, start_idx, end_idx]() {
+                std::vector<int> partial_neighbors;
+                for (size_t j = start_idx; j < end_idx; ++j) {
+                    if (euclideanDistance(p_target, points[j]) <= eps) {
+                        partial_neighbors.push_back(static_cast<int>(j));
+                    }
+                }
+                return partial_neighbors;
+            }));
+        }
+
+        for (auto& fut : futures) {
+            std::vector<int> partial_neighbors = fut.get();
+            all_neighbors.insert(all_neighbors.end(), partial_neighbors.begin(), partial_neighbors.end());
+        }
+        return all_neighbors;
     };
 
-    auto expandCluster = [&](int pointIdx, int clusterId, const std::vector<int>& neighbors) {
+    auto expandCluster = [&](int pointIdx, int clusterId, const std::vector<int>& initial_neighbors) {
         labels[pointIdx] = clusterId;
 
-        std::vector<int> queue = neighbors;
+        std::vector<int> queue = initial_neighbors; // Use the passed-in neighbors
         while (!queue.empty()) {
             int idx = queue.back();
             queue.pop_back();
+            // In the original code, expandCluster's `neighbors` param was directly used.
+            // Here `initial_neighbors` is used for the first point in `expandCluster`.
+            // Subsequent calls to `regionQuery` for points *within* `expandCluster`
+            // will use the parallelized version.
 
             if (labels[idx] == UNVISITED) {
                 labels[idx] = clusterId;
 
-                auto subNeighbors = regionQuery(points[idx]);
+                // Call the (now parallelized) regionQuery
+                auto subNeighbors = regionQuery(points[idx]); 
                 if (subNeighbors.size() >= static_cast<size_t>(minPts)) {
-                    queue.insert(queue.end(), subNeighbors.begin(), subNeighbors.end());
+                    // Add new core point neighbors to the queue
+                    for(int neighbor_idx : subNeighbors) {
+                        // Only add if not already processed or part of another cluster effectively
+                        if (labels[neighbor_idx] == UNVISITED || labels[neighbor_idx] == NOISE) {
+                             // Check not already in queue might be useful for very dense clusters
+                            if (std::find(queue.begin(), queue.end(), neighbor_idx) == queue.end()) {
+                                queue.push_back(neighbor_idx);
+                            }
+                        }
+                    }
                 }
             }
 
+            // If a point was NOISE but is reachable from a core point, it becomes part of the cluster
             if (labels[idx] == NOISE) {
                 labels[idx] = clusterId;
             }
@@ -1293,11 +1356,11 @@ static std::vector<int> dbscan(const std::vector<Point>& points, double eps, int
             continue;
         }
 
-        auto neighbors = regionQuery(points[i]);
-        if (neighbors.size() < static_cast<size_t>(minPts)) {
+        auto current_neighbors = regionQuery(points[i]); // Parallelized call
+        if (current_neighbors.size() < static_cast<size_t>(minPts)) {
             labels[i] = NOISE;
         } else {
-            expandCluster(i, clusterId, neighbors);
+            expandCluster(i, clusterId, current_neighbors); // Pass neighbors to expandCluster
             ++clusterId;
         }
     }
@@ -1517,6 +1580,7 @@ ZoneGrid generateNavigationGrid(
 std::vector<std::vector<int>> computeAllPathDists(const std::vector<Edge>& baseEdges, int numNodes)
 {
     // Build adjacency list
+    // Build adjacency list
     std::vector<std::vector<std::pair<int, int>>> adjList(numNodes);
     for (const auto& edge : baseEdges) {
         int weight = edge.path.size();
@@ -1528,33 +1592,42 @@ std::vector<std::vector<int>> computeAllPathDists(const std::vector<Edge>& baseE
     const int INF = std::numeric_limits<int>::max();
     std::vector<std::vector<int>> dist(numNodes, std::vector<int>(numNodes, INF));
 
-	for (int start = 0; start < numNodes; ++start) {
-		std::vector<int> localDist(numNodes, INF);
-		localDist[start] = 0;
-		std::set<std::pair<int, int>> pq;
-		pq.insert({ 0, start });
+    std::vector<std::future<std::vector<int>>> futures;
+    futures.reserve(numNodes);
 
-		while (!pq.empty()) {
-			auto [currentDist, currentNode] = *pq.begin();
-			pq.erase(pq.begin());
-			if (currentDist > localDist[currentNode]) continue;
+    for (int startNode = 0; startNode < numNodes; ++startNode) {
+        futures.emplace_back(std::async(std::launch::async, [startNode, numNodes, &adjList, INF]() {
+            std::vector<int> localDist(numNodes, INF);
+            localDist[startNode] = 0;
+            std::set<std::pair<int, int>> pq;
+            pq.insert({0, startNode});
 
-			for (const auto& [neighbor, weight] : adjList[currentNode]) {
-				int newDist = currentDist + weight;
-				if (newDist < localDist[neighbor]) {
-					if (localDist[neighbor] != INF) {
-						pq.erase({ localDist[neighbor], neighbor });
-					}
-					localDist[neighbor] = newDist;
-					pq.insert({ newDist, neighbor });
-				}
-			}
-		}
+            while (!pq.empty()) {
+                auto [currentDist, currentNode] = *pq.begin();
+                pq.erase(pq.begin());
 
-		for (int end = 0; end < numNodes; ++end) {
-			dist[start][end] = localDist[end];
-		}
-	}
+                if (currentDist > localDist[currentNode]) {
+                    continue;
+                }
+
+                for (const auto& [neighbor, weight] : adjList[currentNode]) {
+                    int newDist = currentDist + weight;
+                    if (newDist < localDist[neighbor]) {
+                        if (localDist[neighbor] != INF) {
+                            pq.erase({localDist[neighbor], neighbor});
+                        }
+                        localDist[neighbor] = newDist;
+                        pq.insert({newDist, neighbor});
+                    }
+                }
+            }
+            return localDist;
+        }));
+    }
+
+    for (int startNode = 0; startNode < numNodes; ++startNode) {
+        dist[startNode] = futures[startNode].get();
+    }
 
     return dist;
 }

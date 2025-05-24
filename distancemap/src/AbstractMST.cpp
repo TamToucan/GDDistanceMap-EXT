@@ -128,29 +128,63 @@ void computeCandidateEdges(const BaseGraph& inBaseGraph,
 
     int numAbstractNodes = static_cast<int>(abstractNodes.size());
     candidates.clear();
+    std::cerr << "##MST: computeCandidateEdges: " << numAbstractNodes << " abstract nodes." << std::endl;
 
-    // For each abstract node as a source:
-	std::cerr << "##MST: computeCandidateEdges: " << numAbstractNodes << std::endl;
-    for (int i = 0; i < numAbstractNodes; ++i) {
-        int startBase = abstractNodes[i].baseCenterNode;
-        std::vector<int> costs;
-        std::vector<int> prevNodes;
-        std::vector<std::pair<int, bool>> usedEdge;
-        runDijkstra(startBase, baseGraph, costs, prevNodes, usedEdge);
-
-        // For every other abstract node j > i, record the candidate edge.
-        for (int j = i + 1; j < numAbstractNodes; ++j) {
-            int targetBase = abstractNodes[j].baseCenterNode;
-            if (costs[targetBase] == std::numeric_limits<int>::max())
-                continue; // Not reachable.
-            AbstractEdge ce;
-            ce.from = i;
-            ce.to = j;
-            ce.path = reconstructPath(startBase, targetBase, prevNodes, usedEdge, edges);
-            candidates.push_back(ce);
+    if (numAbstractNodes < 2) { // No pairs to form edges
+        if (numAbstractNodes == 1 && abstractNodes[0].baseNodes.empty()) {
+             // Handle case with one abstract node that has no base nodes if necessary, though typically MST isn't for single nodes.
         }
+        std::cerr << "   => Not enough abstract nodes for MST candidates." << std::endl;
+        return;
     }
-	std::cerr << "   => " << candidates.size() << " candidates" << std::endl;
+    
+    std::vector<std::future<std::vector<AbstractEdge>>> futures;
+    futures.reserve(numAbstractNodes);
+
+    // Launch a task for each abstract node 'i' to find paths to subsequent nodes 'j'
+    for (int i = 0; i < numAbstractNodes; ++i) {
+        futures.emplace_back(std::async(std::launch::async, 
+            [i, &baseGraph, &edges, &abstractNodes, numAbstractNodes]() {
+            std::vector<AbstractEdge> local_candidates;
+            int startBase = abstractNodes[i].baseCenterNode;
+
+            if (startBase < 0 || startBase >= baseGraph.size()) {
+                // Invalid startBase, perhaps an abstract node with no valid baseCenterNode
+                // Or baseGraph might be smaller than expected if abstractNodes[i].baseCenterNode is an invalid index.
+                // This check depends on how baseCenterNode is guaranteed to be valid.
+                // For safety, one might add error logging or skip.
+                return local_candidates; // Return empty if startBase is problematic
+            }
+
+            std::vector<int> costs;
+            std::vector<int> prevNodes;
+            std::vector<std::pair<int, bool>> usedEdge;
+            runDijkstra(startBase, baseGraph, costs, prevNodes, usedEdge);
+
+            for (int j = i + 1; j < numAbstractNodes; ++j) {
+                int targetBase = abstractNodes[j].baseCenterNode;
+                if (targetBase < 0 || targetBase >= costs.size() || costs[targetBase] == std::numeric_limits<int>::max()) {
+                    continue; // Not reachable or invalid targetBase
+                }
+                AbstractEdge ce;
+                ce.from = i;
+                ce.to = j;
+                ce.path = reconstructPath(startBase, targetBase, prevNodes, usedEdge, edges);
+                if (!ce.path.empty()) { // Ensure path reconstruction was successful
+                    local_candidates.push_back(ce);
+                }
+            }
+            return local_candidates;
+        }));
+    }
+
+    // Collect results from all futures
+    for (auto& fut : futures) {
+        std::vector<AbstractEdge> local_candidates = fut.get();
+        candidates.insert(candidates.end(), local_candidates.begin(), local_candidates.end());
+    }
+
+	std::cerr << "   => " << candidates.size() << " candidates found." << std::endl;
 }
 
 // Run Kruskal's algorithm on the candidate edges to build the MST over abstract nodes.
