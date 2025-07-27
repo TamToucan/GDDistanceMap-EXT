@@ -861,8 +861,10 @@ Path followPath(int startX, int startY,
     // =========================
     // Try each direction in HVD
     // =========================
-    for (auto [dx, dy] : directionsHVD)
+    for (auto hvd : directionsHVD)
     {
+        auto dx = hvd.first;
+        auto dy = hvd.second;
         int nx = startX + dx;
         int ny = startY + dy;
 
@@ -1071,6 +1073,19 @@ std::vector<Edge> findNodeEdges(const std::vector<Point>& nodes, const std::vect
     return result;
 }
 
+    //
+    // Unfortunately there are a few scenarios that dont connect. Basically
+	// some places aren't marked as nodes (some areas where "double/triple thick"
+	// This allows a path between A and B that bypasses C, but marks the
+	// path cells as visited, so C doesnt have a path of A or B e.g.
+	//
+	//    A--x---B    x isn't marked as a node
+	//       |        (real scenario is more messy)
+    //       C        So A->B cells visited => no paths from C
+    //
+    // To fix it have version of findEdges that just checks for paths from the
+    // list of nodes. Any new edges are added to the complete list
+	// 
 
 BaseGraph fixBaseEdges(std::vector<Edge>& baseEdges, const Grid& infoGrid, const std::vector<Point>& baseNodes)
 {
@@ -1111,6 +1126,7 @@ BaseGraph fixBaseEdges(std::vector<Edge>& baseEdges, const Grid& infoGrid, const
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
+#if 0
 void expandPaths(Grid& infoGrid)
 {
 	std::cerr << "#####EXPAND"<< std::endl;
@@ -1144,13 +1160,70 @@ void expandPaths(Grid& infoGrid)
             if (cell & 0xffff0000) continue;
 
 			// Encode: XPND (direction << 13) | edge_index
-			cell =  XPND | (GridType::reverseDirIndex[dir] << XPND_DIR_SHIFT) | edgeIndex;
+			cell = XPND | (GridType::reverseDirIndex[dir] << XPND_DIR_SHIFT) | edgeIndex;
             std::cerr << "## " << c << "," << r << " => " << std::hex << cell << std::dec
 			<< " (D:" << get_XPND_DIR(cell) << " E:" << get_XPND_EDGE(cell) << ")" << std::endl;
 			q.emplace(nr, nc, edgeIndex);
 		}
 	}
 }
+#else
+void expandPaths(Grid& infoGrid)
+{
+    std::cerr << "#####EXPAND" << std::endl;
+    int rows = infoGrid.size();
+    int cols = infoGrid[0].size();
+
+    // Queue: (row, col, distance, dir_to_parent)
+    std::queue<std::tuple<int, int, int, int>> q;
+
+    // Initialize: Mark edge cells and enqueue their neighbors
+    for (int r = 0; r < rows; ++r) {
+        for (int c = 0; c < cols; ++c) {
+            if (infoGrid[r][c] & GridType::EDGE) {
+                for (int dir = 0; dir < 8; ++dir) {
+                    int nr = r + GridType::directions8[dir].second;
+                    int nc = c + GridType::directions8[dir].first;
+                    int& neighbor = infoGrid[nr][nc];
+
+                    if (neighbor & 0xffff0000) continue;
+
+                    // Encode reverse direction to reach this edge
+                    neighbor = XPND | (GridType::reverseDirIndex[dir] << XPND_DIR_SHIFT) | 1;
+                    q.emplace(nr, nc, 1, GridType::reverseDirIndex[dir]);
+
+                    std::cerr << "##EDGE:" << c << "," << r << " -> " << nc << "," << nr
+                        << " dist:1 dir:" << GridType::reverseDirIndex[dir] << std::endl;
+                }
+            }
+        }
+    }
+
+    // BFS expand
+    while (!q.empty()) {
+        auto [r, c, dist, dirToEdge] = q.front();
+        q.pop();
+
+        for (int dir = 0; dir < 8; ++dir) {
+            int nr = r + GridType::directions8[dir].second;
+            int nc = c + GridType::directions8[dir].first;
+            int& cell = infoGrid[nr][nc];
+
+            if (cell & 0xffff0000) continue;
+
+            // Encode reverse direction to reach the edge, distance = dist + 1
+            cell = XPND | (GridType::reverseDirIndex[dir] << XPND_DIR_SHIFT) | (dist + 1);
+            q.emplace(nr, nc, dist + 1, GridType::reverseDirIndex[dir]);
+
+            std::cerr << "## " << c << "," << r << " => " << nc << "," << nr
+                << " val: " << std::hex << cell << std::dec
+                << " (D:" << get_XPND_DIR(cell)
+                << " Dist:" << get_XPND_DIST(cell) << ")" << std::endl;
+        }
+    }
+}
+
+#endif
 
 //////////////////////////////////////////////////////////////
 
@@ -1700,6 +1773,7 @@ std::vector<ZoneInfo> generateAbstractZones(ZoneGrid& zoneGrid,
 
 void generateZoneBoundaries(AbstractLevel& abstractLevel)
 {
+    std::cerr << "## generateZoneBoundaries" << std::endl;
 	const ZoneGrid& zoneGrid = abstractLevel.zoneGrid;
 	std::vector<ZoneInfo>& zones = abstractLevel.zones;
     int rows = zoneGrid.size();
@@ -1710,20 +1784,22 @@ void generateZoneBoundaries(AbstractLevel& abstractLevel)
 			if (curZone == -1) continue;
 
 			// Only need to 4 dirsT since scanning left->right, top->bottom
-            for (const auto& [dx, dy] : searchDirs4) {
-                int nx = x + dx;
-                int ny = y + dy;
+            for (int dir4 = 0; dir4 < searchDirs4.size(); ++dir4) {
+				int nx = x + searchDirs4[dir4].first;
+				int ny = y + searchDirs4[dir4].second;
 
                 int neighborZone = zoneGrid[ny][nx].closestAbstractNodeIdx;
                 if ((neighborZone != -1) && (neighborZone != curZone)) {
 
                     // Add this cell to current zone's boundary map for neighborZone
-                    zones[curZone].zoneBoundaryCellMap[neighborZone].insert({ x, y });
+                    int dir8 = dir4todir8Index[dir4];
+                    zones[curZone].zoneBoundaryCellMap[neighborZone].insert({ { x, y }, dir8});
 
                     // Also add neighbor cell to neighbor zone's boundary map for currentZone
-                    zones[neighborZone].zoneBoundaryCellMap[curZone].insert({ nx, ny });
+                    zones[neighborZone].zoneBoundaryCellMap[curZone].insert({ { nx, ny }, reverseDirIndex[dir8]});
 
 					std::cerr << "  ZONE: " << curZone << " BOUNDARY: " << neighborZone
+						<< " dir4: " << dir4 << " dir8: " << dir8 << " rev8: " << reverseDirIndex[dir8]
 						<< " cell: " << x << "," << y << " neighbor: " << nx << "," << ny << std::endl;
                 }
             }
@@ -1731,6 +1807,7 @@ void generateZoneBoundaries(AbstractLevel& abstractLevel)
     }
 }
 
+#if 0
 // Function to compute the shortest path using BFS (fallback when no direct BaseEdge exists)
 std::vector<std::pair<int, int>> computeShortestPath(
     const std::pair<int, int>& start,
@@ -1768,8 +1845,13 @@ std::vector<std::pair<int, int>> computeShortestPath(
 
     return {}; // No path found (shouldn't happen in a valid map)
 }
+#endif
 
-// Main function to generate AbstractEdges
+
+// Main function to generate extra AbstractEdges
+// This is needed since the current AbstractEdges might not
+// connect every zone ie. for each pair of adjacnent zones
+// there is no AbstractEdge create an "extra" one
 std::vector<AbstractEdge> makeExtraAbstractEdges(
 	const std::vector<Point>& baseNodes,
 	const std::vector<Edge>& baseEdges,
@@ -1798,7 +1880,6 @@ std::vector<AbstractEdge> makeExtraAbstractEdges(
             // Connect the two zones
             connectedZones[{zoneA, zoneB}] = true;
             connectedZones[{zoneB, zoneA}] = true;
-
 
             std::vector<AbstractNode> adjacentNodes;
             adjacentNodes.push_back(abstractNodes[zoneA]);
@@ -2206,9 +2287,9 @@ void debugZoneBoundaries(int pass, const AbstractLevel& ablv)
         for (const auto& zoneBoundary : zone.zoneBoundaryCellMap) {
             int curZone = zoneBoundary.first;
             const auto& boundaryCells = zoneBoundary.second;
-            for (const auto& cell : boundaryCells) {
-                int c = cell.first;
-                int r = cell.second;
+            for (const auto& boundary : boundaryCells) {
+                int c = boundary.sink.first;
+                int r = boundary.sink.second;
                 tempGrid[r][c] = WALL;
             }
         }

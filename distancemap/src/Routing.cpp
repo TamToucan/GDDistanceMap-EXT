@@ -353,16 +353,15 @@ std::vector<int> bidirectionalAStar(const SparseGraph& g, int sourceEdgeIdx, int
         std::cerr << "=> NO PATH" << std::endl;
         return {};
     }
+
 	std::cerr << "=> MEETING NODE: " << meeting_node << std::endl;
 	std::cerr << "=> FWD PATH: " << forward_edge.size() << std::endl;
-	for (int i = 0; i < forward_edge.size(); ++i)
-	{
-		std::cerr << "  fwd_edge[" << i << "] = " << forward_edge[i] << std::endl;
+	for (int i = 0; i < forward_edge.size(); ++i) {
+		if (forward_edge[i] != -1) std::cerr << "  fwd_edge[" << i << "] = " << forward_edge[i] << std::endl;
 	}
 	std::cerr << "=> BCK PATH: " << backward_edge.size() << std::endl;
-	for (int i = 0; i < backward_edge.size(); ++i)
-	{
-		std::cerr << "  bck_edge[" << i << "] = " << backward_edge[i] << std::endl;
+	for (int i = 0; i < backward_edge.size(); ++i) {
+		if (backward_edge[i] != -1) std::cerr << "  bck_edge[" << i << "] = " << backward_edge[i] << std::endl;
 	}
 
     // Reconstruct path
@@ -468,6 +467,11 @@ std::vector<int> findZonePath(const SparseGraph routingGraph,
 {
     std::cerr << "## Find ZonePathRoute fromEdge: " << sourceEdgeIdx << " toEdge: " << targetEdgeIdx << std::endl;
     std::cerr << "   Using " << zoneEdges.size() << " zone edges and " << zoneBases.size() << " bases" << std::endl;
+    std::cerr << "   Edges:";
+    for (auto z : zoneEdges) std::cerr << "  " << z;
+    std::cerr << "\n   Bases:";
+    for (auto b : zoneBases) std::cerr << "  " << b;
+    std::cerr << std::endl;
 
     // Create allowed sets
     std::unordered_set<int> allowedEdges(zoneEdges.begin(), zoneEdges.end());

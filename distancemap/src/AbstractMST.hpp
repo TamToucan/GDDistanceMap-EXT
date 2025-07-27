@@ -10,6 +10,8 @@
 
 #include "GridTypes.hpp"
 
+// Min Span Tree for the give AbstractNode using the graph of base edges/nodes
+// The BaseGragh is just a different view of the baseEdges/nodes
 class AbstractMST {
 public:
 	AbstractMST();

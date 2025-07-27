@@ -82,8 +82,7 @@ void runDijkstra(int startIdx, const BaseGraph& graph,
 
 // Reconstruct the path (as a sequence of Points) between two base nodes given the Dijkstra predecessors.
 Path reconstructPath(int startIdx, int targetIdx, const std::vector<int>& prevNodes,
-                     const std::vector<std::pair<int, bool>>& usedEdge,
-                     const std::vector<Edge>& edges)
+                     const std::vector<std::pair<int, bool>>& usedEdge, const std::vector<Edge>& edges)
 {
     std::vector<std::pair<int, bool>> edgeSequence;
     int curIdx = targetIdx;
@@ -107,6 +106,22 @@ Path reconstructPath(int startIdx, int targetIdx, const std::vector<int>& prevNo
         firstSegment = false;
     }
     return fullPath;
+}
+std::vector<int> reconstructBaseNodePath(int startIdx, int targetIdx, const std::vector<int>& prevNodes)
+{
+    std::vector<int> path;
+    int curIdx = targetIdx;
+    while (curIdx != -1 && curIdx != startIdx) {
+        path.push_back(curIdx);
+        curIdx = prevNodes[curIdx];
+    }
+
+    if (curIdx == -1)
+        return {}; // no path
+
+    path.push_back(startIdx);
+    std::reverse(path.begin(), path.end());
+    return path;
 }
 
 
@@ -147,6 +162,17 @@ void computeCandidateEdges(const BaseGraph& inBaseGraph,
             ce.from = i;
             ce.to = j;
             ce.path = reconstructPath(startBase, targetBase, prevNodes, usedEdge, edges);
+            ce.nodePath = reconstructBaseNodePath(startBase, targetBase, prevNodes); 
+            std::cerr << "NODEPATH:  " << i << std::endl << "    ";
+			for (auto n : ce.nodePath) {
+                std::cerr << "  " << n << " (" << baseNodes[n].first << "," << baseNodes[n].second << ")";
+			}
+            std::cerr << std::endl;
+			for (const auto& n : ce.path) {
+                std::cerr << "     (" << n.first << "," << n.second << ")";
+			}
+            std::cerr << std::endl;
+
             candidates.push_back(ce);
         }
     }
@@ -223,7 +249,9 @@ std::vector<AbstractEdge> AbstractMST::generateMSTAbstractEdges(const BaseGraph&
 {
     std::vector<AbstractEdge> candidates;
 	std::cerr << "##MST: generateMSTAbstractEdges: for " << abstractNodes.size() << " abstract nodes" << std::endl;
+    // Idea was to remove dup F -> T keep the shortest path, but multiple paths is allows for varied movement
     // std::vector<Edge> simpleEdges = simplifyEdges(edges);
     computeCandidateEdges(graph, edges, baseNodes, abstractNodes, candidates);
     return buildMST(candidates, static_cast<int>(abstractNodes.size()));
 }
+

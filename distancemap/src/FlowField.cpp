@@ -18,15 +18,14 @@
 #include "GridToGraph.hpp"
 
 namespace FlowField {
+
+// Maximum cost (our cost type is uint8_t, so 255 is max).
+constexpr uint8_t MAX_COST = 255;
+// Given uniform cost, each step costs 1.
+constexpr uint8_t STEP_COST = 1;
+
+
 void debugFlow(int lev, int curZone, int adjacentZone, SubGrid subGrid);
-
-	// Maximum cost (our cost type is uint8_t, so 255 is max).
-	constexpr uint8_t MAX_COST = 255;
-	constexpr uint8_t NO_DIR = 127;
-	constexpr uint8_t SINK_BIT = 0x80;
-
-	// Given uniform cost, each step costs 1.
-	constexpr uint8_t STEP_COST = 1;
 
 // Extract a subgrid for the target zone.
 // zoneGrid: global vector of vector of GridPointInfo (size = rows x cols)
@@ -93,20 +92,19 @@ SubGrid extractZoneSubGrid(const std::vector<std::vector<GridType::GridPointInfo
 	return subGrid;
 }
 
-std::vector<std::pair<int, int>> convertSinksToLocal(const GridType::BoundaryCells& globalSinks, const SubGrid& subGrid)
+std::vector<GridType::BoundaryInfo> convertSinksToLocal(const GridType::BoundaryCells& globalSinks, const SubGrid& subGrid)
 {
-	std::vector<std::pair<int, int>> localSinks;
-	for (const auto& sink : globalSinks) {
-		int gx = sink.first;
-		int gy = sink.second;
+	std::vector<GridType::BoundaryInfo> localSinks;
+	for (const auto& boundary: globalSinks) {
+		int gx = boundary.sink.first;
+		int gy = boundary.sink.second;
 		// Only include sinks that are within the bounding box.
 		if (gx >= subGrid.offsetX && gx < subGrid.offsetX + subGrid.width &&
 			gy >= subGrid.offsetY && gy < subGrid.offsetY + subGrid.height)
 		{
 			int localX = gx - subGrid.offsetX;
 			int localY = gy - subGrid.offsetY;
-			localSinks.emplace_back(localX, localY);
-			std::cerr << "SINK: " << gx << "," << gy << " => " << localX <<"," << localY<< std::endl;
+			localSinks.emplace_back(localX, localY, boundary.exitDirIdx);
 		}
 	}
 	return localSinks;
@@ -114,7 +112,7 @@ std::vector<std::pair<int, int>> convertSinksToLocal(const GridType::BoundaryCel
 
 //#########################################################################################
 
-std::vector<uint16_t> generateFlowFieldDial(const SubGrid& subGrid, const std::vector<std::pair<int, int>>& sinks)
+std::vector<uint16_t> generateFlowFieldDial(const SubGrid& subGrid, const std::vector<GridType::BoundaryInfo>& sinks)
 {
 #if 0
 	std::cout << std::endl;
@@ -130,9 +128,9 @@ std::vector<uint16_t> generateFlowFieldDial(const SubGrid& subGrid, const std::v
 		std::cout << std::endl;
 	}
 	std::cout << "std::vector<std::pair<int,int>> sinks = { ";
-	for (const auto s : sinks)
+	for (const auto bi : sinks)
 	{
-		std::cout << "{" << s.first << "," << s.second << "}, ";
+		std::cout << "{" << bi.sink.first << "," << bi.sink.second << "}, ";
 	}
 	std::cout << " };" << std::endl;
 #endif
@@ -151,11 +149,11 @@ std::vector<uint16_t> generateFlowFieldDial(const SubGrid& subGrid, const std::v
 	std::vector<std::vector<int>> buckets(MAX_COST + 1);
 
 	// Initialize sink cells.
-	for (const auto& sink : sinks) {
-		int x = sink.first;
-		int y = sink.second;
+	for (const auto& bi : sinks) {
+		int x = bi.sink.first;
+		int y = bi.sink.second;
 		int idx = SubGrid::indexFor(x, y, cols);
-		costFlowField[idx] = 0 | NO_DIR;  // cost 0, no direction (or mark as sink if needed)
+		costFlowField[idx] = 0 | SINK_BIT | bi.exitDirIdx;  // cost 0, SINK, dir to adjacent zone
 		buckets[0].push_back(idx);
 	}
 
@@ -165,7 +163,6 @@ std::vector<uint16_t> generateFlowFieldDial(const SubGrid& subGrid, const std::v
 		auto& bucket = buckets[cost];
 		if (bucket.empty()) {
 			// no cells at this cost, move on
-			std::cerr << "SKIP COST: " << static_cast<int>(cost) << std::endl;
 			++cost;
 			if (cost == 0) break;
 			continue;
@@ -173,7 +170,6 @@ std::vector<uint16_t> generateFlowFieldDial(const SubGrid& subGrid, const std::v
 
 		// Pop one cell from the back of the current-cost bucket
 		int curIdx = bucket.back();
-		std::cerr << "COST " << static_cast<int>(cost) << " index " << curIdx << std::endl;
 		bucket.pop_back();
 		// Decode current cell's coordinates.
 		int x = curIdx % cols;
@@ -217,12 +213,12 @@ void generateFlowGrids(GridToGraph::Graph& graph)
 	std::cerr << "## SUBS: AbstractLevels: " << graph.abstractLevels.size() << std::endl;
 	for (int i = 0; i < graph.abstractLevels.size(); ++i) {
 		auto& ablv = graph.abstractLevels[i];
+		std::cerr << "  == Get subgrid bounding box for level: " << i << std::endl;
 		for (int zi = 0; zi < ablv.zones.size(); ++zi) {
-			std::cerr << "     zone: " << zi << std::endl;
 			auto subgrid = extractZoneSubGrid(ablv.zoneGrid, graph.infoGrid, zi);
 			ablv.subGrids.push_back(subgrid);
 		}
-		std::cerr << "  AbstractLevel: " << i << " subgrids: " << ablv.subGrids.size() << std::endl;
+		std::cerr << "  => AbstractLevel: " << i << " subgrids: " << ablv.subGrids.size() << std::endl;
 	}
 
 	std::cerr << "## FLOW: AbstractLevels: " << graph.abstractLevels.size() << std::endl;
@@ -232,15 +228,17 @@ void generateFlowGrids(GridToGraph::Graph& graph)
 		for (int zi = 0; zi < ablv.zones.size(); ++zi) {
 			auto& subGrid = ablv.subGrids[zi];
 			const auto& adjZones = ablv.zones[zi].adjacentZones;
-			std::cerr << "    Zone: " << zi << " adjZones: " << adjZones.size() << std::endl;
+			std::cerr << "    Zone: " << zi << " subGrid: " << subGrid.offsetX<<", "<<subGrid.offsetY <<" "<<subGrid.width<<"x"<<subGrid.height
+				<< " adjZones: " << adjZones.size() << std::endl;
 			for (int ni = 0; ni < adjZones.size(); ++ni) {
 				int adjZone = adjZones[ni];
 				const auto& boundaryCells = ablv.zones[zi].zoneBoundaryCellMap[adjZone];
 				auto localSinks = convertSinksToLocal(boundaryCells, subGrid);
 
-				std::cerr << "        subGrid: " << subGrid.offsetX<<","<<subGrid.offsetY <<" "<<subGrid.width<<"x"<<subGrid.height
-					<< " sinks: " << localSinks.size() << std::endl;
-				std::cerr << "== lv:" << levIdx << " zn:" << zi << " adj:" << ni <<" sinks:" << localSinks.size() << std::endl;
+				std::cerr << "      zone:" << adjZone << " sinks: " << localSinks.size() << std::endl;
+				for (const auto& bi : localSinks) {
+					std::cerr << "        sink: " << (bi.sink.first+subGrid.offsetX) << "," << (bi.sink.second+subGrid.offsetY) << " dir: " << bi.exitDirIdx << std::endl;
+				}
 				subGrid.costFlowFields.push_back({ adjZone, generateFlowFieldDial(subGrid, localSinks) });
 				debugFlow(levIdx, zi, adjZone, subGrid);
 			}
