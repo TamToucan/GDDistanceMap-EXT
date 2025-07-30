@@ -509,7 +509,7 @@ static void untrack_cb(godot::Node* id, void* ctx) {
 float GDDistanceMap::getMove(godot::Node* id, godot::Vector2 from, godot::Vector2 to, int type) {
 	GridType::Point fromPnt = {from.x/(info.mCellWidth*8), from.y/(info.mCellHeight*8) };
 	GridType::Point toPnt = {to.x/(info.mCellWidth*8), to.y/(info.mCellHeight*8) };
-	std::cerr << "===GETMOVE: " << from.x << "," << to.x << "  cell: " << info.mCaveWidth << "x" << info.mCellHeight << " => " << fromPnt.first <<","<<fromPnt.second
+	std::cerr << "===GETMOVE: " << from.x << "," << to.x << "  cell: " << info.mCellWidth << "x" << info.mCellHeight << " => " << fromPnt.first <<","<<fromPnt.second
 		<< " to:" << toPnt.first << "," << toPnt.second << std::endl;
 
 	std::cerr << "********** FROM:" << from.x << "," << from.y << " TO " << to.x << "," << to.y
