@@ -4,6 +4,7 @@
 #include "FlowField.hpp"
 
 #include "GDTracker.hpp"
+#include "GDDistanceMap.hpp"
 
 struct FlowField::SubGrid subgrid;
 
@@ -27,8 +28,14 @@ void debugFlow(FlowField::SubGrid subGrid)
 int main(int argc, char** argv)
 {
 #if 1
-	auto grid = GridToGraph::readGridFromFile("D:/tmp/GRID.txt");
+	auto grid = GridToGraph::readGridFromFile("GRID.txt");
 	auto graph = GridToGraph::makeGraph(grid);
+	GDDistanceMap dm;
+	Vector2i cave(32, 32);
+	Vector2i cell(8, 8);
+	dm.setCaveSize(cave);
+	dm.setCellSize(cell);
+	dm.getMove(nullptr, godot::Vector2(0, 0), godot::Vector2(16, 16), 0);
 	return 0;
 #else
 	auto grid = GridToGraph::readGridFromFile("D:/tmp/GRID.txt");
@@ -56,5 +63,6 @@ W, W, W, W, W, W, W, W, 0, W, W, W, W,
 	subgrid.costFlowFields.push_back({ 0, costDirFlow });
 	debugFlow(subgrid);
 #endif
+	std::cerr << "FlowField generated" << std::endl;
 	return 1;
 }
