@@ -1,6 +1,7 @@
 #include <iostream>
 #include <string>
 #include "GridToGraph.hpp"
+#include "Router.hpp"
 #include "FlowField.hpp"
 
 #include "GDTracker.hpp"
@@ -25,18 +26,38 @@ void debugFlow(FlowField::SubGrid subGrid)
     }
 }
 
+std::pair<float, float> computeDirection(float angleDeg) {
+	const double MYPI = 3.14159265358979323846;
+	double radians = angleDeg * (MYPI / 180.0);
+	return { std::cos(radians), std::sin(radians) };
+}
+
 int main(int argc, char** argv)
 {
 #if 1
 	auto grid = GridToGraph::readGridFromFile("GRID.txt");
 	auto graph = GridToGraph::makeGraph(grid);
-	GDDistanceMap dm;
-	Vector2i cave(32, 32);
-	Vector2i cell(8, 8);
-	dm.setCaveSize(cave);
-	dm.setCellSize(cell);
-	dm.getMove(nullptr, godot::Vector2(0, 0), godot::Vector2(16, 16), 0);
-	return 0;
+
+	Router::Info info;
+	info.mCaveHeight = 32;
+	info.mCellWidth = 8;
+	info.mCellHeight = 8;
+	Vector2 from(648, 827);
+	Vector2 to(1956, 54);
+	Router::RouteCtx* ctx = new Router::RouteCtx();
+	do {
+		ctx->from.first = from.x;
+		ctx->from.second = from.y;
+		ctx->to.first = to.x;
+		ctx->to.second = to.y;
+		ctx->type = 0;
+		float ang = Router::getAngle(graph, info, ctx, from, to, 0);
+		GridType::Point mv = computeDirection(ang);
+		ctx->next.first += mv.first * 8;;
+		ctx->next.second += mv.second * 8;
+	} while (from != to);
+	delete ctx;
+
 #else
 	auto grid = GridToGraph::readGridFromFile("D:/tmp/GRID.txt");
 	subgrid.width = 13;

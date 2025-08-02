@@ -63,12 +63,51 @@ target_link_libraries(${LIB_NAME}
     PRIVATE MathStuff Stuff Algo GDTracker.debug
     PUBLIC godot::cpp)
 
-# Test executable
-add_executable(testMain "${CMAKE_CURRENT_SOURCE_DIR}/test/testMain.cpp")
-target_link_libraries(testMain PRIVATE ${LIB_NAME})
+add_custom_target(copy_grid ALL
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_CURRENT_SOURCE_DIR}/test/GRID.txt"
+        "$<TARGET_FILE_DIR:testMain>"
+    DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/test/GRID.txt"
+)
+
+add_executable(testMain
+    test/testMain.cpp
+)
+
+add_dependencies(testMain copy_grid)
+
+# Add library directories
+link_directories(
+    "${CMAKE_BINARY_DIR}/distancemap"
+    "${CMAKE_BINARY_DIR}/distancemap/GDTracker/build/tracker"
+)
+
+# Link testMain against your built libraries
+target_link_libraries(testMain
+    PRIVATE
+        GDDistanceMap.debug
+        GDTracker.debug
+        godot-cpp
+)
+
+
 target_include_directories(testMain PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
-    "${GDTRACKER_SOURCE_DIR}/tracker/src")
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../GDTracker-EXT/tracker/src")
+
+# Define the DLL paths manually (update these if needed)
+set(GDDISTANCEMAP_DLL "${CMAKE_BINARY_DIR}/distancemap/libGDDistanceMap.debug.dll")
+set(GDTRACKER_DLL "${CMAKE_BINARY_DIR}/distancemap/GDTracker/build/tracker/libGDTracker.debug.dll")
+
+# Copy DLLs to same folder as testMain.exe after build
+add_custom_command(TARGET testMain POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${GDDISTANCEMAP_DLL}" "$<TARGET_FILE_DIR:testMain>"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${GDTRACKER_DLL}" "$<TARGET_FILE_DIR:testMain>"
+)
+
+##############################
 
 if(MSVC)
     target_compile_options(testMain PRIVATE /Zi /Od)

@@ -7,6 +7,7 @@
 #include <godot_cpp/classes/object.hpp>
 #include <godot_cpp/classes/tile_map_layer.hpp>
 #include "GridToGraph.hpp"
+#include "Router.hpp"
 #include "GridTypes.hpp"
 #include "WallDistanceGrid.hpp"
 #include "GDTracker.hpp"
@@ -21,31 +22,15 @@ namespace godot {
 class GDDISTANCEMAP_API GDDistanceMap : public RefCounted {
 	GDCLASS(GDDistanceMap, RefCounted)
 
-public:
-	struct Info {
-		int mCaveWidth = 2;
-		int mCaveHeight = 2;
-		int mBorderWidth = 1;
-		int mBorderHeight = 1;
-		int mCellWidth = 1;
-		int mCellHeight = 1;
-		int mStartCellX = 0;
-		int mStartCellY = 0;
-		godot::Vector2i mFloor;
-		godot::Vector2i mWall;
-		TileMapLayer* pTileMap;
-		int mLayer;
-	};
-
 protected:
 	static void _bind_methods();
 
-	Info info;
+	Router::Info info;
 
     GridType::Grid wallDistGrid;
     DistanceMap::SightGrid sightGrid;
 	GridToGraph::Graph graph;
-	GDTracker* pTracker;
+	GDTracker* pTracker = nullptr;
 
 public:
 	GDDistanceMap();
@@ -74,7 +59,6 @@ public:
 	float getMove(godot::Node* node, godot::Vector2 from, godot::Vector2 to, int type);
 
 private:
-	bool isFloor(int cx, int cy, TileMapLayer* pTileMap, int layer);
 	Vector2i getMapPos(int x, int y);
 };
 

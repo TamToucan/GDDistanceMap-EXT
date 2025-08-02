@@ -1,6 +1,7 @@
 #ifndef DISTANCEMAP_SRC_FLOWFIELD_HPP_
 #define DISTANCEMAP_SRC_FLOWFIELD_HPP_
 
+#include <iostream>
 #include <unordered_map>
 #include <optional>
 #include <cstdint>
