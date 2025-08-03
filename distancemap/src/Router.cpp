@@ -335,6 +335,15 @@ GD_API float getAngle(const GridToGraph::Graph& graph, const Router::Info& info,
 
 		std::cerr << "********** FROM:" << from.x << "," << from.y << " TO " << to.x << "," << to.y
 			<< "    " << fromPnt.first << "," << fromPnt.second << " TO " << toPnt.first << "," << toPnt.second << std::endl;
+		std::cerr << "CTX: F: " << ctx->from.first << "," << ctx->from.second
+			<< " C T: " << ctx->to.first << "," << ctx->to.second
+			<< " C N: " << ctx->next.first << "," << ctx->next.second
+			<< " C DIR: " << ctx->curDir
+			<< " FRM " << from.x << "," << from.y
+			<< " TO  " << to.x << "," << to.y
+			<< " FPNT: " << fromPnt.first << "," << fromPnt.second
+			<< " TPNT: " << toPnt.first << "," << toPnt.second
+			<< std::endl;
 
 		if (ctx->type == type) {
 			if (fromPnt.first != ctx->next.first || fromPnt.second != ctx->next.second) {
