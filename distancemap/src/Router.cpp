@@ -326,7 +326,7 @@ GridType::Point getNextMove(const GridToGraph::Graph& graph, GridType::Point& so
 
 //////////////////////////////////////////////////////////////////////////////
 
-GD_API float getAngle(const GridToGraph::Graph& graph, const Router::Info& info,
+float getAngle(const GridToGraph::Graph& graph, const Router::Info& info,
 					RouteCtx* ctx, godot::Vector2 from, godot::Vector2 to, int type) {
 		GridType::Point fromPnt = { from.x / (info.mCellWidth * 8), from.y / (info.mCellHeight * 8) };
 		GridType::Point toPnt = { to.x / (info.mCellWidth * 8), to.y / (info.mCellHeight * 8) };

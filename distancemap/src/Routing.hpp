@@ -6,16 +6,6 @@
 #include "GridTypes.hpp"
 #include "Grid2D.h"
 
-#ifdef _WIN32
-#ifdef GDDISTANCEMAP_EXPORTS  // Must match your project name
-#define GD_API __declspec(dllexport)
-#else
-#define GD_API __declspec(dllimport)
-#endif
-#else
-#define GD_API
-#endif
-
 namespace Routing {
 
 	// Use to store supset of base nodes/edges in format that can be used for routing

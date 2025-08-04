@@ -2003,7 +2003,7 @@ std::vector<AbstractLevel> makeAbstractLevels(const Graph& graph)
 	return abstractLevels;
 }
 
-GD_API Graph makeGraph(const Grid& floorGrid)
+Graph makeGraph(const Grid& floorGrid)
 {
 	std::cout << "## MAKE GRAPH" << std::endl;
 	{
@@ -2585,7 +2585,7 @@ void writeGridToFile(const std::vector<std::vector<int>>& grid, const std::strin
 }
 #endif
 
-GD_API std::vector<std::vector<int>> readGridFromFile(const std::string& filename)
+std::vector<std::vector<int>> readGridFromFile(const std::string& filename)
 {
     std::ifstream inFile(filename);
     if (!inFile) {

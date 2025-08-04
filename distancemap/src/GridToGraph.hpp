@@ -9,16 +9,7 @@
 #include "GridTypes.hpp"
 #include "FlowField.hpp"
 #include "Routing.hpp"
-
-#ifdef _WIN32
-#ifdef GDDISTANCEMAP_EXPORTS  // Must match your project name
-#define GD_API __declspec(dllexport)
-#else
-#define GD_API __declspec(dllimport)
-#endif
-#else
-#define GD_API
-#endif
+#include "GDDistanceMapApi.h"
 
 //
 // Take the 2D grid of EMPTY/PATH (i.e. 1 = floor, 0 = wall) and
@@ -78,7 +69,7 @@
 
 namespace GridToGraph {
 
-GD_API std::vector<std::vector<int>> readGridFromFile(const std::string& filename);
+GDDISTANCE_MAP_API std::vector<std::vector<int>> readGridFromFile(const std::string& filename);
 
 using namespace GridType;
 
@@ -130,7 +121,7 @@ struct Graph {
 //
 // Floor must = PATH on input i.e. walkable, WALLS = EMPTY
 //
-GD_API Graph makeGraph(const GridType::Grid& floorGrid);
+GDDISTANCE_MAP_API Graph makeGraph(const GridType::Grid& floorGrid);
 
 }
 

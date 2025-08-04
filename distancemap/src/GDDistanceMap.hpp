@@ -11,15 +11,10 @@
 #include "GridTypes.hpp"
 #include "WallDistanceGrid.hpp"
 #include "GDTracker.hpp"
-
-#ifdef GDDISTANCEMAP_EXPORTS
-#  define GDDISTANCEMAP_API __declspec(dllexport)
-#else
-#  define GDDISTANCEMAP_API __declspec(dllimport)
-#endif
+#include "GDDistanceMapApi.h"
 
 namespace godot {
-class GDDISTANCEMAP_API GDDistanceMap : public RefCounted {
+class GDDISTANCE_MAP_API GDDistanceMap : public RefCounted {
 	GDCLASS(GDDistanceMap, RefCounted)
 
 protected:

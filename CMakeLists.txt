@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.19)
+cmake_minimum_required(VERSION 3.20)
 project(gdextension-distaceMap)
 
 set(FETCHCONTENT_QUIET OFF)
@@ -18,6 +18,19 @@ FetchContent_Declare(
         GIT_TAG godot-4.3-stable
 )
 
-FetchContent_MakeAvailable(GDExtension)
+
+FetchContent_Declare(
+	Libs
+	GIT_REPOSITORY https://github.com/TamToucan/Libs.git
+	GIT_TAG main
+)
+
+FetchContent_Declare(
+	GDTracker-EXT
+	GIT_REPOSITORY https://github.com/TamToucan/GDTracker-EXT.git
+	GIT_TAG main
+)
+
+FetchContent_MakeAvailable(GDExtension Libs GDTracker-EXT)
 
 add_subdirectory(distancemap)
