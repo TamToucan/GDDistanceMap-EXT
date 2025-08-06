@@ -3,5 +3,5 @@ entry_symbol = "libgddistanceMap_init"
 compatibility_minimum = "4.2"
 
 [libraries]
-windows.debug.x86_64 = "res://addons/gddistanceMap/bin/libGDDistanceMap.debug.dll"
-windows.release.x86_64 = "res://addons/gddistanceMap/bin/libGDDistanceMap.debug.dll"
+windows.debug.x86_64 = "res://addons/gddistanceMap/bin/GDDistanceMap.dll"
+windows.release.x86_64 = "res://addons/gddistanceMap/bin/GDDistanceMap.dll"

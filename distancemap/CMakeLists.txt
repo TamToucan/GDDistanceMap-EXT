@@ -9,6 +9,11 @@ file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS
 
 add_library(${LIB_NAME} SHARED ${SOURCES})
 
+set_target_properties(${LIB_NAME} PROPERTIES OUTPUT_NAME ${LIB_NAME})
+if(NOT MSVC)
+	set_target_properties(${LIB_NAME} PROPERTIES PREFIX "")
+endif()
+
 # Include directories
 target_include_directories(${LIB_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
@@ -54,11 +59,11 @@ target_include_directories(testMain PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 # Define the DLL paths manually (update these if needed)
 IF (ALL_SUBS_BUILD_ON)
-    set(GDDISTANCEMAP_DLL "${CMAKE_BINARY_DIR}/GDDistanceMap-EXT/distancemap/libGDDistanceMap.dll")
-    set(GDTRACKER_DLL "${CMAKE_BINARY_DIR}/GDTracker-EXT/tracker/libGDTracker.dll")
+    set(GDDISTANCEMAP_DLL "${CMAKE_BINARY_DIR}/GDDistanceMap-EXT/distancemap/GDDistanceMap.dll")
+    set(GDTRACKER_DLL "${CMAKE_BINARY_DIR}/GDTracker-EXT/tracker/GDTracker.dll")
 ELSE()
-    set(GDDISTANCEMAP_DLL "${CMAKE_BINARY_DIR}/distancemap/libGDDistanceMap.dll")
-    set(GDTRACKER_DLL "${CMAKE_BINARY_DIR}/_deps/gdtracker-ext-build/tracker/libGDTracker.dll")
+    set(GDDISTANCEMAP_DLL "${CMAKE_BINARY_DIR}/distancemap/GDDistanceMap.dll")
+    set(GDTRACKER_DLL "${CMAKE_BINARY_DIR}/_deps/gdtracker-ext-build/tracker/GDTracker.dll")
 ENDIF()
 
 # Copy DLLs to same folder as testMain.exe after build
