@@ -53,7 +53,13 @@ target_link_libraries(testMain
 target_include_directories(testMain PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 # Define the DLL paths manually (update these if needed)
-set(GDDISTANCEMAP_DLL "${CMAKE_BINARY_DIR}/distancemap/libGDDistanceMap.dll")
+IF (ALL_SUBS_BUILD_ON)
+    set(GDDISTANCEMAP_DLL "${CMAKE_BINARY_DIR}/GDDistanceMap-EXT/distancemap/libGDDistanceMap.dll")
+    set(GDTRACKER_DLL "${CMAKE_BINARY_DIR}/GDTracker-EXT/tracker/libGDTracker.dll")
+ELSE()
+    set(GDDISTANCEMAP_DLL "${CMAKE_BINARY_DIR}/distancemap/libGDDistanceMap.dll")
+    set(GDTRACKER_DLL "${CMAKE_BINARY_DIR}/_deps/gdtracker-ext-build/tracker/libGDTracker.dll")
+ENDIF()
 
 # Copy DLLs to same folder as testMain.exe after build
 add_custom_command(TARGET testMain POST_BUILD
@@ -70,12 +76,6 @@ set(LOTT_ADDON_DIR "D:/git/the-lott/addons/gddistanceMap/bin")
 
 add_dependencies(${LIB_NAME} GDTracker)
 
-set(GDTRACKER_DLL "${CMAKE_BINARY_DIR}/GDTracker/build/tracker/libGDTracker.debug.dll")
-
-set(GDTRACKER_DLL "${CMAKE_BINARY_DIR}/GDTracker/build/tracker/libGDTracker.debug.dll")
-
-
-set(GDTRACKER_DLL "${CMAKE_BINARY_DIR}/_deps/gdtracker-ext-build/tracker/libGDTracker.dll")
 
 add_custom_command(
     TARGET ${LIB_NAME} POST_BUILD
