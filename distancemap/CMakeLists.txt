@@ -70,6 +70,8 @@ ENDIF()
 add_custom_command(TARGET testMain POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${GDDISTANCEMAP_DLL}" "$<TARGET_FILE_DIR:testMain>"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+	"${GDTRACKER_DLL}" "$<TARGET_FILE_DIR:testMain>"
 )
 
 ##############################
