@@ -95,6 +95,7 @@ GridType::Point routeToNext(const GridToGraph::Graph& graph, const GridType::Poi
 			<< std::hex << srcCell << std::dec << ", but not start of path" << std::endl;
 		std::cerr << "ERROR: " << source.first << "," << source.second << " cell "
 			<< std::hex << srcCell << std::dec << ", but not start of path" << std::endl;
+		return source;
 	}
 	else if (fromto.first == routeNodes.front()) {
 		std::cerr << "  1ST" << std::endl;
@@ -117,6 +118,7 @@ GridType::Point routeToNext(const GridToGraph::Graph& graph, const GridType::Poi
 			<< std::hex << srcCell << std::dec << ", but not start of path" << std::endl;
 		std::cerr << "ERROR: " << source.first << "," << source.second << " cell "
 			<< std::hex << srcCell << std::dec << ", but not start of path" << std::endl;
+		return source;
 	}
 
     int edgeCell = graph.routingGraph.edgeGrid.get(source.first, source.second);
