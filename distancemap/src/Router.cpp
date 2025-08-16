@@ -364,11 +364,6 @@ float getAngle(const GridToGraph::Graph& graph, const Router::Info& info,
 		ctx->next = getNextMove(graph, fromPnt, toPnt);
 		ctx->curDir = computeAngle(ctx->next.first - ctx->from.first, ctx->next.second - ctx->from.second);
 		std::cerr << "##ANG from:" << fromPnt.first << "," << fromPnt.second << " NXT: " << ctx->next.first << "," << ctx->next.second << " = " << ctx->curDir << std::endl;
-		for (int ii = 0; ii < GridType::directions8.size(); ++ii) {
-			int xx = GridType::directions8[ii].first;
-			int yy = GridType::directions8[ii].second;
-			std::cerr << "                  XXX dir: " << ii << " => " << xx << "," << yy << " => " << computeAngle(xx, yy) << std::endl;
-		}
 		return ctx->curDir;
 	}
 }

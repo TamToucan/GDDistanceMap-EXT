@@ -61,7 +61,8 @@ CTX: F: 9,4 C T: 28,15 C N: 10,5 C DIR: 45 FRM 632.328,348.995 TO  1830.51,986.7
 CTX: F: 9,4 C T: 28,15 C N: 10,5 C DIR: 45 FRM 648.827,365.494 TO  1830.51,986.754 FPNT: 10,5 TPNT: 28,15
 */
 	Router::Info info;
-	info.mCaveHeight = 32;
+	info.mCaveWidth = 34;
+	info.mCaveHeight = 34;
 	info.mCellWidth = 8;
 	info.mCellHeight = 8;
 	Vector2 from(300, 250);
@@ -74,6 +75,14 @@ CTX: F: 9,4 C T: 28,15 C N: 10,5 C DIR: 45 FRM 648.827,365.494 TO  1830.51,986.7
 		std::pair<float, float> mv = computeDirection(ang);
 		from.x += mv.first * 23;
 		from.y += mv.second * 23;
+		if (from.x > info.mCaveWidth*info.mCellWidth*8) {
+			std::cerr << "from.x > info.mCaveWidth*info.mCellWidth*8 out of bounds" << std::endl;
+			return -1;
+		}
+		if (from.y > info.mCaveHeight*info.mCellHeight*8) {
+			std::cerr << "from.y > info.mCaveHeight*info.mCellHeight*8 out of bounds" << std::endl;
+			return -1;
+		}
 		std::cerr << "CTV MV " << mv.first << "," << mv.second
 			<< "  ang " << ang<< std::endl;
 	} while ((ctx->from != ctx->to) && (--count > 0));

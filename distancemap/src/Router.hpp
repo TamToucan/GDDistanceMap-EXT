@@ -13,7 +13,7 @@ namespace Router {
 		GridType::Point from;
 		GridType::Point to;
 		GridType::Point next;
-		int type;
+		int type = -1;
 		float curDir;
 	};
 

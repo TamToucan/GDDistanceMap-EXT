@@ -381,6 +381,7 @@ void debugGridEdges(const Graph& graphs);
 void debugAbstractNodes(int pass, const AbstractLevel& ablv, const Graph& graph);
 void debugAbstractEdges(int pass, const AbstractLevel& ablv, const Graph& graph, const char* fname);
 void debugZones(int pass, const AbstractLevel& ablv, const Graph& graph);
+void debugZoneEdges(int pass, const AbstractLevel& ablv, const Graph& graph);
 void debugZoneBoundaries(int pass, const AbstractLevel& ablv);
 #endif
 
@@ -1645,6 +1646,7 @@ std::vector<ZoneInfo> generateAbstractZones(ZoneGrid& zoneGrid,
 	const std::vector<Edge>& baseEdges,
     const std::vector<AbstractNode>& abstractNodes)
 {
+    std::cerr << "## generateAbstractZones" << std::endl;
     int rows = grid.size();
     int cols = grid[0].size();
 
@@ -1665,10 +1667,12 @@ std::vector<ZoneInfo> generateAbstractZones(ZoneGrid& zoneGrid,
     }
 
     // Multi-source path-based BFS
+    std::cerr << "## QSIZE: " << q.size() << std::endl;
     while (!q.empty()) {
         auto [c, r, abstractIdx, cost] = q.front();
         q.pop();
 
+        std::cerr << "ZG: POP " << c << "," << r << " abIdx:" << abstractIdx << " cost:" << cost << std::endl;
 		// Check the neighbors of the cur zone cell
         for (const auto& [dc, dr] : directions8) {
             int nc = c + dc;
@@ -1696,27 +1700,50 @@ std::vector<ZoneInfo> generateAbstractZones(ZoneGrid& zoneGrid,
     std::vector<ZoneInfo> zones(abstractNodes.size());
 
     // If this edge crosses zones update the zone infos
-	auto addEdge = [baseEdges, zoneGrid](int edgeIdx, int curZone, std::vector<ZoneInfo>& zones) -> void {
+	auto addEdge = [baseEdges, zoneGrid](int edgeIdx, std::vector<ZoneInfo>& zones) -> void {
         const Edge& edge = baseEdges[edgeIdx];
         GridType::Point from = edge.path.front();
         GridType::Point to = edge.path.back();
 		int fromZone = zoneGrid[from.second][from.first].closestAbstractNodeIdx;
 		int toZone = zoneGrid[to.second][to.first].closestAbstractNodeIdx;
+        
+        std::cerr << "DEBUG: Processing edge " << edgeIdx << " from (" << from.first << "," << from.second << ") to (" << to.first << "," << to.second << ")";
+        std::cerr << " fromZone=" << fromZone << " toZone=" << toZone << std::endl;
+        
+        // Add the edge to ALL zones it passes through (fromZone and toZone)
+        std::vector<int> zonesToAdd = {fromZone, toZone};
+        
         // If the edge crosses zones
 		if (fromZone != toZone) {
-			// The boundaryZone is the zone that is not the current zone
-			int boundaryZone = (fromZone == curZone) ? toZone : fromZone;
 			// Add the boundaryZone if not already in the adjacentZones list
-			if (std::find(zones[curZone].adjacentZones.begin(), zones[curZone].adjacentZones.end(), boundaryZone) == zones[curZone].adjacentZones.end()) {
-				zones[curZone].adjacentZones.push_back(boundaryZone);
-				zones[boundaryZone].adjacentZones.push_back(curZone);
+			if (std::find(zones[fromZone].adjacentZones.begin(), zones[fromZone].adjacentZones.end(), toZone) == zones[fromZone].adjacentZones.end()) {
+				zones[fromZone].adjacentZones.push_back(toZone);
+				zones[toZone].adjacentZones.push_back(fromZone);
 			}
 		}
-		// Add the edge to the lit of edges for the current zone
-		if (std::find(zones[curZone].baseEdgeIdxs.begin(), zones[curZone].baseEdgeIdxs.end(), edgeIdx) == zones[curZone].baseEdgeIdxs.end()) {
-			zones[curZone].baseEdgeIdxs.push_back(edgeIdx);
+		
+		// Add the edge to ALL zones it belongs to
+		for (int zoneIdx : zonesToAdd) {
+			if (std::find(zones[zoneIdx].baseEdgeIdxs.begin(), zones[zoneIdx].baseEdgeIdxs.end(), edgeIdx) == zones[zoneIdx].baseEdgeIdxs.end()) {
+				zones[zoneIdx].baseEdgeIdxs.push_back(edgeIdx);
+				std::cerr << "DEBUG: Added edge " << edgeIdx << " to zone " << zoneIdx << std::endl;
+			} else {
+				std::cerr << "DEBUG: Edge " << edgeIdx << " already in zone " << zoneIdx << std::endl;
+			}
 		}
 	};
+
+    // First, add all edges from the graph to their appropriate zones
+    std::cerr << "DEBUG: Processing " << baseEdges.size() << " total edges" << std::endl;
+    for (int edgeIdx = 0; edgeIdx < baseEdges.size(); ++edgeIdx) {
+        const Edge& edge = baseEdges[edgeIdx];
+        if (edge.toDeadEnd) {
+            std::cerr << "DEBUG: Skipping edge " << edgeIdx << " (dead end)" << std::endl;
+            continue; // Skip dead end edges
+        }
+        std::cerr << "DEBUG: Calling addEdge for edge " << edgeIdx << std::endl;
+        addEdge(edgeIdx, zones);
+    }
 
     // generate Nodes and boundaries
 	for (int y = 1; y < rows-1; ++y) {
@@ -1733,36 +1760,7 @@ std::vector<ZoneInfo> generateAbstractZones(ZoneGrid& zoneGrid,
 			// If node and/or new zone boundary then add to zone's list
 			if (cell & NODE) {
 				zones[curZone].baseNodeIdxs.push_back(idx);
-				// Corner case of 2 nodes next to each other so no EDGE cell to check
-				for (const auto& [dx, dy] : directions8) {
-					int nx = x + dx;
-					int ny = y + dy;
-					int dirCell = grid[ny][nx];
-					if (dirCell & WALL) continue;
-
-					if (dirCell & NODE) {
-						// index of the adjacent node
-						int otherIdx = dirCell & 0xFFFF;
-                        // Performance: Only check for shortEdge when at the smaller index node
-                        // Since nodes are adjacent and we will hit both nodes since checking every cell
-                        if (idx < otherIdx) {
-                            // Get the BaseGraphInfo for the other node
-                            const auto& edges = baseGraph.at(idx);
-                            for (const auto& bi : edges) {
-                                if (bi.neighbor == otherIdx) {
-                                    addEdge(bi.edgeIndex, curZone, zones);
-                                    break;
-                                }
-                            }
-                        }
-					}
-				}
-            }
-            // If it's an EDGE then add it
-			else if (cell & EDGE) {
-				if (baseEdges[idx].toDeadEnd) continue;
-				addEdge(idx, curZone, zones);
-           }
+			}
 		}
 	}
 
@@ -1980,6 +1978,7 @@ std::vector<AbstractLevel> makeAbstractLevels(const Graph& graph)
 		//
 		ablv.zones = generateAbstractZones(ablv.zoneGrid, graph.infoGrid, graph.baseGraph, graph.baseEdges, ablv.abstractNodes);
 		debugZones(pass, ablv, graph);
+		debugZoneEdges(pass, ablv, graph);
 
         generateZoneBoundaries(ablv);
 		debugZoneBoundaries(pass, ablv);
@@ -2614,4 +2613,71 @@ std::vector<std::vector<int>> readGridFromFile(const std::string& filename)
     return grid;
 }
 
+void debugZoneEdges(int pass, const AbstractLevel& ablv, const Graph& graph)
+{
+	std::cerr << "## ZONE EDGES DETAILED DUMP" << std::endl;
+	std::cerr << "================================================" << std::endl;
+	
+	// First, show all edges and which zones they should belong to
+	std::cerr << "ALL EDGES AND THEIR ZONE SPANS:" << std::endl;
+	for (int edgeIdx = 0; edgeIdx < graph.baseEdges.size(); ++edgeIdx) {
+		const auto& edge = graph.baseEdges[edgeIdx];
+		GridType::Point from = edge.path.front();
+		GridType::Point to = edge.path.back();
+		int fromZone = ablv.zoneGrid[from.second][from.first].closestAbstractNodeIdx;
+		int toZone = ablv.zoneGrid[to.second][to.first].closestAbstractNodeIdx;
+		
+		std::cerr << "Edge " << edgeIdx << ": (" << from.first << "," << from.second << ") -> (" 
+			<< to.first << "," << to.second << ") spans zones " << fromZone << " -> " << toZone;
+		if (fromZone != toZone) {
+			std::cerr << " (CROSSES ZONES)";
+		}
+		std::cerr << std::endl;
+	}
+	
+	std::cerr << "\nZONE CONTENTS:" << std::endl;
+	for (int zoneIdx = 0; zoneIdx < ablv.zones.size(); ++zoneIdx) {
+		const auto& zone = ablv.zones[zoneIdx];
+		std::cerr << "Zone " << zoneIdx << ":" << std::endl;
+		std::cerr << "  Base Nodes (" << zone.baseNodeIdxs.size() << "): ";
+		for (const auto& nodeIdx : zone.baseNodeIdxs) {
+			std::cerr << nodeIdx << " ";
+		}
+		std::cerr << std::endl;
+		
+		std::cerr << "  Base Edges (" << zone.baseEdgeIdxs.size() << "): ";
+		for (const auto& edgeIdx : zone.baseEdgeIdxs) {
+			std::cerr << edgeIdx << " ";
+		}
+		std::cerr << std::endl;
+		
+		std::cerr << "  Adjacent Zones: ";
+		for (const auto& adjZone : zone.adjacentZones) {
+			std::cerr << adjZone << " ";
+		}
+		std::cerr << std::endl;
+		
+		// Show which edges should be in this zone but aren't
+		std::cerr << "  MISSING EDGES (should be here but aren't): ";
+		for (int edgeIdx = 0; edgeIdx < graph.baseEdges.size(); ++edgeIdx) {
+			const auto& edge = graph.baseEdges[edgeIdx];
+			GridType::Point from = edge.path.front();
+			GridType::Point to = edge.path.back();
+			int fromZone = ablv.zoneGrid[from.second][from.first].closestAbstractNodeIdx;
+			int toZone = ablv.zoneGrid[to.second][to.first].closestAbstractNodeIdx;
+			
+			// Edge should be in this zone if either end is in this zone
+			bool shouldBeHere = (fromZone == zoneIdx || toZone == zoneIdx);
+			bool isHere = (std::find(zone.baseEdgeIdxs.begin(), zone.baseEdgeIdxs.end(), edgeIdx) != zone.baseEdgeIdxs.end());
+			
+			if (shouldBeHere && !isHere) {
+				std::cerr << edgeIdx << " ";
+			}
+		}
+		std::cerr << std::endl;
+		std::cerr << "---" << std::endl;
+	}
+}
+
 } // namespace
+
