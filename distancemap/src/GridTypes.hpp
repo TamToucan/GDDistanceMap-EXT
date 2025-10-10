@@ -15,7 +15,7 @@ const int NODE = 0x010000;   // baseNode index
 const int DEND = 0x020000;   // baseNode index
 const int EDGE = 0x040000;   // <0|1 2nd Half of path> <15bits baseEdge index>
 const int XPND = 0x080000;   // <3bit directions8 index to Edge> | <13 edge dist>
-const int BOUNDARY = 0x400000; // <3bit directions9 index to non-WALL
+const int BOUNDARY = 0x400000; // <3bit directions8 index to non-WALL
 const int WALL = 0x800000;   // 0
 
 const int EDGE_MASK = 0x7fff;

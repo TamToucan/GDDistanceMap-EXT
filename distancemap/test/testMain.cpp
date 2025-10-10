@@ -1,10 +1,14 @@
 #include <iostream>
 #include <string>
+#include <godot_cpp/variant/vector2.hpp>
+
+using namespace godot;
+
+
+#include "GridTypes.hpp"
 #include "GridToGraph.hpp"
 #include "Router.hpp"
-#include "FlowField.hpp"
 
-#include "GDTracker.hpp"
 #include "GDDistanceMap.hpp"
 
 struct FlowField::SubGrid subgrid;
@@ -21,9 +25,9 @@ void debugFlow(FlowField::SubGrid subGrid)
 			int cost = costDir >> 8;
 			int dir = costDir & 0xFF;
 			std::cout << (dir < 10 ? "  " : (dir<100 ? " " : "")) << dir << " ";
-        }
+		}
 		std::cout << std::endl;
-    }
+	}
 }
 
 std::pair<float, float> computeDirection(float angleDeg) {
@@ -34,61 +38,79 @@ std::pair<float, float> computeDirection(float angleDeg) {
 
 int main(int argc, char** argv)
 {
-#if 1
 	auto grid = GridToGraph::readGridFromFile("GRID.txt");
 	auto graph = GridToGraph::makeGraph(grid);
-
-	/*
-CTX ===CREATE CONTEXT
-CTX ===ADD CALLBACK
-CTX: F: 4,3 C T: 28,15 C N: 5,3 C DIR: 0 FRM 300,250 TO  1830.51,986.754 FPNT: 4,3 TPNT: 28,15
-CTX: F: 4,3 C T: 28,15 C N: 5,3 C DIR: 0 FRM 323.334,250 TO  1830.51,986.754 FPNT: 5,3 TPNT: 28,15
-CTX: F: 5,3 C T: 28,15 C N: 6,3 C DIR: 0 FRM 346.667,250 TO  1830.51,986.754 FPNT: 5,3 TPNT: 28,15
-CTX: F: 5,3 C T: 28,15 C N: 6,3 C DIR: 0 FRM 370,250 TO  1830.51,986.754 FPNT: 5,3 TPNT: 28,15
-CTX: F: 5,3 C T: 28,15 C N: 6,3 C DIR: 0 FRM 393.334,250 TO  1830.51,986.754 FPNT: 6,3 TPNT: 28,15
-CTX: F: 6,3 C T: 28,15 C N: 7,4 C DIR: 45 FRM 409.833,266.499 TO  1830.51,986.754 FPNT: 6,4 TPNT: 28,15
-CTX: F: 6,3 C T: 28,15 C N: 7,4 C DIR: 45 FRM 426.332,282.998 TO  1830.51,986.754 FPNT: 6,4 TPNT: 28,15
-CTX: F: 6,3 C T: 28,15 C N: 7,4 C DIR: 45 FRM 442.831,299.498 TO  1830.51,986.754 FPNT: 6,4 TPNT: 28,15
-CTX: F: 6,3 C T: 28,15 C N: 7,4 C DIR: 45 FRM 459.33,315.997 TO  1830.51,986.754 FPNT: 7,4 TPNT: 28,15
-CTX: F: 7,4 C T: 28,15 C N: 8,4 C DIR: 0 FRM 482.664,315.997 TO  1830.51,986.754 FPNT: 7,4 TPNT: 28,15
-CTX: F: 7,4 C T: 28,15 C N: 8,4 C DIR: 0 FRM 505.997,315.997 TO  1830.51,986.754 FPNT: 7,4 TPNT: 28,15
-CTX: F: 7,4 C T: 28,15 C N: 8,4 C DIR: 0 FRM 529.331,315.997 TO  1830.51,986.754 FPNT: 8,4 TPNT: 28,15
-CTX: F: 8,4 C T: 28,15 C N: 9,4 C DIR: 0 FRM 552.664,315.997 TO  1830.51,986.754 FPNT: 8,4 TPNT: 28,15
-CTX: F: 8,4 C T: 28,15 C N: 9,4 C DIR: 0 FRM 575.997,315.997 TO  1830.51,986.754 FPNT: 8,4 TPNT: 28,15
-CTX: F: 8,4 C T: 28,15 C N: 9,4 C DIR: 0 FRM 599.33,315.997 TO  1830.51,986.754 FPNT: 9,4 TPNT: 28,15
-CTX: F: 9,4 C T: 28,15 C N: 10,5 C DIR: 45 FRM 615.829,332.496 TO  1830.51,986.754 FPNT: 9,5 TPNT: 28,15
-CTX: F: 9,4 C T: 28,15 C N: 10,5 C DIR: 45 FRM 632.328,348.995 TO  1830.51,986.754 FPNT: 9,5 TPNT: 28,15
-CTX: F: 9,4 C T: 28,15 C N: 10,5 C DIR: 45 FRM 648.827,365.494 TO  1830.51,986.754 FPNT: 10,5 TPNT: 28,15
-*/
+	auto pathGrid(grid);
 	Router::Info info;
-	info.mCaveWidth = 34;
-	info.mCaveHeight = 34;
+	info.mCaveHeight = 32;
 	info.mCellWidth = 8;
 	info.mCellHeight = 8;
 	Vector2 from(300, 250);
 	Vector2 to(1830, 986);
 	Router::RouteCtx* ctx = new Router::RouteCtx();
 	ctx->type = -1;
-	int count = 100;
+	int count = 1000;
+	int mv = 1;
+	bool reached_target = false;
+	GridType::Point toPnt = { to.x / (info.mCellWidth * 8), to.y / (info.mCellHeight * 8) };
+	GridType::Point prevPnt = toPnt;
 	do {
+		GridType::Point fromPnt = { from.x / (info.mCellWidth * 8), from.y / (info.mCellHeight * 8) };
+		reached_target = (fromPnt.first == toPnt.first && fromPnt.second == toPnt.second);
+		if (prevPnt != fromPnt) {
+			if (pathGrid[fromPnt.second][fromPnt.first] == 'x') {
+				std::cerr << "ERROR: LOOPED BACK TO " << fromPnt.first <<","<< fromPnt.second << std::endl;
+				break;
+			}
+		}
+		prevPnt = fromPnt;
+		if (pathGrid[fromPnt.second][fromPnt.first] == 0) {
+			std::cerr << "ERROR: WALL " << fromPnt.first <<","<< fromPnt.second << std::endl;
+			break;
+		}
+		pathGrid[fromPnt.second][fromPnt.first] = 'x';
+		std::cerr << "MOVEFROM: " << fromPnt.first <<","<< fromPnt.second << std::endl;
+
 		float ang = Router::getAngle(graph, info, ctx, from, to, 0);
 		std::pair<float, float> mv = computeDirection(ang);
 		from.x += mv.first * 23;
 		from.y += mv.second * 23;
-		if (from.x > info.mCaveWidth*info.mCellWidth*8) {
-			std::cerr << "from.x > info.mCaveWidth*info.mCellWidth*8 out of bounds" << std::endl;
-			return -1;
-		}
-		if (from.y > info.mCaveHeight*info.mCellHeight*8) {
-			std::cerr << "from.y > info.mCaveHeight*info.mCellHeight*8 out of bounds" << std::endl;
-			return -1;
-		}
+		GridType::Point nw = { from.x / (info.mCellWidth * 8), from.y / (info.mCellHeight * 8) };
 		std::cerr << "CTV MV " << mv.first << "," << mv.second
-			<< "  ang " << ang<< std::endl;
-	} while ((ctx->from != ctx->to) && (--count > 0));
+			<< "  ang " << ang<< " cell: " << fromPnt.first << "," << fromPnt.second
+			<< " -> " << nw.first << "," <<  nw.second << std::endl;
+		
+	} while (!reached_target && (--count > 0));
 	delete ctx;
 
-#else
+	for (int row = 0; row < pathGrid.size(); ++row) {
+		for (int col = 0; col < pathGrid[0].size(); ++col) {
+			int v = pathGrid[row][col];
+			if (v == 0) {
+				std::cerr << "#";
+			}
+			else
+			if (v == 'x') {
+				std::cerr << "x";
+			}
+			else {
+				std::cerr << " ";
+			}
+		}
+		std::cerr << std::endl;
+	}
+
+	if (reached_target) {
+		std::cerr << "OK: PATH FOUND" << std::endl;
+	}
+	else {
+		std::cerr << "ERROR: NO PATH" << std::endl;
+	}
+
+
+	return reached_target ? 0: 1;
+
+#if 0
 	auto grid = GridToGraph::readGridFromFile("D:/tmp/GRID.txt");
 	subgrid.width = 13;
 	subgrid.height = 11;
@@ -96,17 +118,17 @@ CTX: F: 9,4 C T: 28,15 C N: 10,5 C DIR: 45 FRM 648.827,365.494 TO  1830.51,986.7
 	subgrid.offsetY = 1;
 	auto W = GridType::WALL;
 	subgrid.grid = {
-W, W, W, W, W, W, W, W, 0, 0, 0, 0, 0,
-0, 0, 0, 0, 0, 0, 0, W, W, 0, 0, 0, 0,
-0, 0, 0, 0, 0, 0, 0, W, W, 0, 0, 0, 0,
-0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-W, 0, 0, W, W, W, W, 0, 0, 0, 0, 0, 0,
-W, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, W, 0,
-W, W, 0, 0, 0, 0, 0, 0, 0, 0, 0, W, W,
-W, W, 0, 0, 0, 0, 0, 0, 0, 0, W, W, W,
-W, W, W, 0, 0, 0, 0, 0, 0, W, W, W, W,
-W, W, W, W, W, W, W, W, 0, W, W, W, W,
+		W, W, W, W, W, W, W, W, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, W, W, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, W, W, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+		W, 0, 0, W, W, W, W, 0, 0, 0, 0, 0, 0,
+		W, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, W, 0,
+		W, W, 0, 0, 0, 0, 0, 0, 0, 0, 0, W, W,
+		W, W, 0, 0, 0, 0, 0, 0, 0, 0, W, W, W,
+		W, W, W, 0, 0, 0, 0, 0, 0, W, W, W, W,
+		W, W, W, W, W, W, W, W, 0, W, W, W, W,
 	};
 	std::vector< std::pair<int,int>> sinks = { { 7,9 }, { 8,10 }, { 6,9 }, { 5,9 }, { 4,9 }, { 8,9 }, { 3,9 } };
 
@@ -114,6 +136,5 @@ W, W, W, W, W, W, W, W, 0, W, W, W, W,
 	subgrid.costFlowFields.push_back({ 0, costDirFlow });
 	debugFlow(subgrid);
 #endif
-	std::cerr << "FlowField generated" << std::endl;
-	return 1;
 }
+

@@ -1,15 +1,5 @@
-#include <iostream>
-#include <vector>
-#include <queue>
-#include <unordered_set>
-#include <cmath>
-#include <algorithm>
-
 #include "Routing.hpp"
-
-#include <filesystem>
-
-#include "GridToGraph.hpp"
+#include "Router.hpp"
 
 namespace Routing {
 
@@ -22,66 +12,59 @@ MathStuff::Grid2D<uint32_t> makeEdgeGrid(const std::vector<GridType::Edge> edges
 
     // Multi-source BFS setup
     std::queue<std::tuple<GridType::Point, uint32_t, int>> q;
-    for (int idx=0; idx < edges.size(); ++idx)
+    for (int idx = 0; idx < edges.size(); ++idx)
     {
         const auto& edge = edges.at(idx);
-//        if (edge.toDeadEnd) continue;
 
         int half = 0;
         int halfCount = edge.path.size() / 2;
-        std::cerr << "EG: " << edge.from << " -> " << edge.to << " p:" << edge.path.size() << std::endl;
-	    for (int dist=0; dist < edge.path.size(); ++dist)
-	    {
+        for (int dist = 0; dist < edge.path.size(); ++dist)
+        {
             const auto p = edge.path.at(dist);
             uint32_t val = (dist << 16) | half | idx;
             result.put(p.first, p.second, val);
-            std::cerr << "  EG: edge:" << idx << " put:" << p.first << "," << p.second
-                << " d:" << dist << std::hex << " H:" << half << " v:" << val << std::dec << std::endl;
             if (halfCount && --halfCount == 0) half = GridType::EDGE_HALF;
-			q.emplace(p, val, 0);
+            q.emplace(p, val, 0);
             distsFromEdge.put(p.first, p.second, 0);
-	    }
+        }
     }
 
     // BFS propagation
     while (!q.empty()) {
         auto [pos, v, d] = q.front();
         q.pop();
-        std::cerr << "Check EG: " << pos.first << "," << pos.second << " v=" << std::hex << v << std::dec << " dist:" << d << std::endl;
 
         ++d;
         int dist = v >> 16;
-		for (const auto& dir : GridType::directions8) {
-            GridToGraph::Point next = { pos.first + dir.first, pos.second + dir.second };
-            if (grid[next.second][next.first] & (GridToGraph::WALL | GridToGraph::NODE|GridType::EDGE)) continue;
+        for (const auto& dir : GridType::directions8) {
+            GridType::Point next = { pos.first + dir.first, pos.second + dir.second };
+            if (grid[next.second][next.first] & (GridType::WALL | GridType::NODE | GridType::EDGE)) continue;
 
             int cell = result.get(next.first, next.second);
-            std::cerr << "    ** " << next.first << "," << next.second << " => " << std::hex << cell << std::dec << std::endl;
             if (cell == -1) {
                 result.put(next.first, next.second, v);
-                std::cerr << "  dir: " << dir.first << "," << dir.second << " empty => " << next.first << "," << next.second << " d:" << d << std::endl;
                 q.emplace(next, v, d);
-				distsFromEdge.put(next.first, next.second, d);
+                distsFromEdge.put(next.first, next.second, d);
             }
             else {
                 int curDist = distsFromEdge.get(next.first, next.second);
-	            if (d < curDist)
-	            {
-					result.put(next.first, next.second, v);
-					q.emplace(next, v, d);
-                    std::cerr << "  dir: " << dir.first << "," << dir.second << " d<cur " << d << " < " << curDist << std::endl;
-					distsFromEdge.put(next.first, next.second, d);
-	            }
+                if (d < curDist)
+                {
+                    result.put(next.first, next.second, v);
+                    q.emplace(next, v, d);
+                    distsFromEdge.put(next.first, next.second, d);
+                }
             }
-		}
+        }
     }
     return result;
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 
-SparseGraph buildSparseGraph(const std::vector<GridType::Point>& baseNodes, const std::vector<GridType::Edge>& baseEdges,
-    const GridType::Grid& infoGrid)
+SparseGraph buildSparseGraph(const std::vector<GridType::Point>& baseNodes, 
+                            const std::vector<GridType::Edge>& baseEdges,
+                            const GridType::Grid& infoGrid)
 {
     SparseGraph g;
     const int numNodes = baseNodes.size();
@@ -96,48 +79,21 @@ SparseGraph buildSparseGraph(const std::vector<GridType::Point>& baseNodes, cons
 
     for (size_t i = 0; i < baseEdges.size(); ++i) {
         const GridType::Edge& e = baseEdges[i];
-        //if (e.toDeadEnd) continue;
-
         g.edgeCosts.push_back(e.toDeadEnd ? 0xffff : e.path.size());
         g.edgeFromTos.emplace_back(e.from, e.toDeadEnd ? -1 : e.to);
 
-		g.forward_adj[e.from].emplace_back(e.to, i);
+        g.forward_adj[e.from].emplace_back(e.to, i);
         g.reverse_adj[e.from].emplace_back(e.to, i);
         if (!e.toDeadEnd) {
-			g.reverse_adj[e.to].emplace_back(e.from, i);
-			g.forward_adj[e.to].emplace_back(e.from, i);
-
+            g.reverse_adj[e.to].emplace_back(e.from, i);
+            g.forward_adj[e.to].emplace_back(e.from, i);
             g.nodeToEdgeIdxs[e.from].push_back(i);
-            g.nodeToEdgeIdxs[e.to] .push_back(i);
+            g.nodeToEdgeIdxs[e.to].push_back(i);
         }
     }
 
     g.edgeGrid = makeEdgeGrid(baseEdges, infoGrid);
 
-    std::cerr << "EDGE GRID" << std::endl;
-    std::cerr << "     ";
-	for (int x = 0; x < g.edgeGrid.width(); ++x)
-	{
-        std::cerr << (x < !0 ? " " : "") << x << "      ";
-	}
-    std::cerr << std::endl;
-    for (int y=0; y < g.edgeGrid.height(); ++y)
-    {
-        std::cerr << (y < 10 ? " " : "") << y << "  ";
-	    for (int x=0; x < g.edgeGrid.width(); ++x)
-	    {
-            uint32_t cell = g.edgeGrid.get(x, y);
-            if (cell == 0xffffffff)
-            {
-                std::cerr << "  :    ";
-                continue;
-            }
-            int dist = cell >> 16;
-            int edg = cell & GridType::EDGE_MASK;
-            std::cerr << (dist < 10 ? " " : "") << dist << ":" << (edg < 10 ? " " : "") << edg << "  ";
-	    }
-        std::cerr << std::endl;
-    }
     return g;
 }
 
@@ -154,338 +110,509 @@ struct SearchState {
     }
 };
 
-std::vector<int> bidirectionalAStar(const SparseGraph& g, int sourceEdgeIdx, int targetEdgeIdx,
-    const std::unordered_set<int>& allowedEdges, const std::unordered_set<int>& allowedNodes)
+///////////////////////////////////////////////////////////////////////////////////////////
+// A* search core
+///////////////////////////////////////////////////////////////////////////////////////////
+
+std::vector<int> bidirectionalAStarFlexible(
+    const SparseGraph& g,
+    std::optional<int> sourceNodeIdx,
+    std::optional<int> sourceEdgeIdx,
+    std::optional<int> targetNodeIdx,
+    std::optional<int> targetEdgeIdx,
+    const std::unordered_set<int>& allowedEdges,
+    const std::unordered_set<int>& allowedNodes)
 {
-    const auto& [srcFrom, srcTo] = g.edgeFromTos[sourceEdgeIdx];
-    const auto& [tgtFrom, tgtTo] = g.edgeFromTos[targetEdgeIdx];
-
-    std::cerr << "srcEdge: " << sourceEdgeIdx << " from: " << srcFrom << " -> " << srcTo << std::endl;
-    std::cerr << "dstEdge: " << targetEdgeIdx << " from: " << tgtFrom << " -> " << tgtTo << std::endl;
-
-    std::cerr << "  Allowed Edges:";
-    for (const int e : allowedEdges)
-    {
-        std::cerr << "  " << e << "("<<g.edgeFromTos[e].first<<"->"<<g.edgeFromTos[e].second<<") ";
-    }
-    std::cerr << std::endl;
-    std::cerr << "  Allowed Nodes:";
-    for (const int n : allowedNodes)
-    {
-        std::cerr << "  " << n;
-    }
-    std::cerr << std::endl;
-
-    // Heuristic helper function
+    // Heuristic function
     auto heuristic = [&](int node, bool isForward) {
         if (isForward) {
-            auto fromDst = std::abs(g.nodePoints[node].first - g.nodePoints[tgtFrom].first)
-                + std::abs(g.nodePoints[node].second - g.nodePoints[tgtFrom].second);
-            auto toDst = tgtTo == -1 ? fromDst
-                : std::abs(g.nodePoints[node].first - g.nodePoints[tgtTo].first)
-                + std::abs(g.nodePoints[node].second - g.nodePoints[tgtTo].second);
-            auto ret = std::min(fromDst, toDst);
-#if 0
-            auto ret = std::min(
-                std::abs(g.nodePoints[node].first - g.nodePoints[tgtFrom].first) +
-                std::abs(g.nodePoints[node].second - g.nodePoints[tgtFrom].second),
-                std::abs(g.nodePoints[node].first - g.nodePoints[tgtTo].first) +
-                std::abs(g.nodePoints[node].second - g.nodePoints[tgtTo].second)
-            );
-#endif
-            std::cerr << "   FWD HEUR node:" << node << " ret: " << ret << std::endl;
-            return ret;
-        }
-		auto fromDst = std::abs(g.nodePoints[node].first - g.nodePoints[srcFrom].first)
-			+ std::abs(g.nodePoints[node].second - g.nodePoints[srcFrom].second);
-		auto toDst = srcTo == -1 ? fromDst
-			: std::abs(g.nodePoints[node].first - g.nodePoints[srcTo].first)
-			+ std::abs(g.nodePoints[node].second - g.nodePoints[srcTo].second);
-		auto ret = std::min(fromDst, toDst);
-#if 0
-        auto ret = std::min(
-            std::abs(g.nodePoints[node].first - g.nodePoints[srcFrom].first) +
-            std::abs(g.nodePoints[node].second - g.nodePoints[srcFrom].second),
-            std::abs(g.nodePoints[node].first - g.nodePoints[srcTo].first) +
-            std::abs(g.nodePoints[node].second - g.nodePoints[srcTo].second)
-        );
-#endif
-		std::cerr << "   BCK HEUR node:" << node << " ret: " << ret << std::endl;
-		return ret;
-		};
-
-    // Initialization
-    std::priority_queue<SearchState, std::vector<SearchState>, std::greater<>> forward_q, backward_q;
-    std::vector<int> forward_cost(g.forward_adj.size(), INT_MAX);
-    std::vector<int> backward_cost(g.forward_adj.size(), INT_MAX);
-    std::vector<int> forward_edge(g.forward_adj.size(), -1);
-    std::vector<int> backward_edge(g.forward_adj.size(), -1);
-
-    // Seed both searches
-    forward_q.push({ srcFrom, sourceEdgeIdx, 0, heuristic(srcFrom, true) });
-    if (srcTo != -1) {
-        forward_q.push({ srcTo,sourceEdgeIdx, 0, heuristic(srcTo, true) });
-    }
-    else {
-        const auto& connections = g.nodeToEdgeIdxs[srcFrom];
-        std::cerr << "SRC TO is deadEnd add Conns: " << connections.size() << std::endl;
-        for (auto edgeIdx : connections) {
-            const auto [f, t] = g.edgeFromTos[edgeIdx];
-			std::cerr << "   Check edge: " << edgeIdx << std::endl;
-            if (f != srcFrom) {
-                std::cerr << "     ADD from fwd con: " << f << std::endl;
-                forward_q.push({ f, edgeIdx, 0, heuristic(f, true) });
+            if (targetNodeIdx.has_value()) {
+                return std::abs(g.nodePoints[node].first - g.nodePoints[*targetNodeIdx].first)
+                     + std::abs(g.nodePoints[node].second - g.nodePoints[*targetNodeIdx].second);
+            } else if (targetEdgeIdx.has_value()) {
+                const auto& [tgtFrom, tgtTo] = g.edgeFromTos[*targetEdgeIdx];
+                auto fromDst = std::abs(g.nodePoints[node].first - g.nodePoints[tgtFrom].first)
+                             + std::abs(g.nodePoints[node].second - g.nodePoints[tgtFrom].second);
+                auto toDst = (tgtTo == -1 ? fromDst :
+                    std::abs(g.nodePoints[node].first - g.nodePoints[tgtTo].first)
+                  + std::abs(g.nodePoints[node].second - g.nodePoints[tgtTo].second));
+                return std::min(fromDst, toDst);
             }
-            if (t != srcFrom && t != -1) {
-                std::cerr << "     ADD to fwd con: " << t << std::endl;
-                forward_q.push({ t, edgeIdx, 0, heuristic(t, true) });
+        } else {
+            if (sourceNodeIdx.has_value()) {
+                return std::abs(g.nodePoints[node].first - g.nodePoints[*sourceNodeIdx].first)
+                     + std::abs(g.nodePoints[node].second - g.nodePoints[*sourceNodeIdx].second);
+            } else if (sourceEdgeIdx.has_value()) {
+                const auto& [srcFrom, srcTo] = g.edgeFromTos[*sourceEdgeIdx];
+                auto fromDst = std::abs(g.nodePoints[node].first - g.nodePoints[srcFrom].first)
+                             + std::abs(g.nodePoints[node].second - g.nodePoints[srcFrom].second);
+                auto toDst = (srcTo == -1 ? fromDst :
+                    std::abs(g.nodePoints[node].first - g.nodePoints[srcTo].first)
+                  + std::abs(g.nodePoints[node].second - g.nodePoints[srcTo].second));
+                return std::min(fromDst, toDst);
             }
         }
-    }
+        return 0;
+    };
 
-    backward_q.push({ tgtFrom, targetEdgeIdx, 0, heuristic(tgtFrom, false) });
-    if (tgtTo != -1) {
-        backward_q.push({ tgtTo, targetEdgeIdx, 0, heuristic(tgtTo, false) });
-    }
-    else {
-		const auto& connections = g.nodeToEdgeIdxs[tgtFrom];
-		std::cerr << "DST is deadEnd add Conns: " << connections.size() << std::endl;
-		for (auto edgeIdx : connections) {
-			const auto [f, t] = g.edgeFromTos[edgeIdx];
-			std::cerr << "   Check edge: " << edgeIdx << " " << f <<" -> " << t << std::endl;
-            if (f != tgtFrom) {
-                std::cerr << "     ADD to back con: " << f << std::endl;
-				backward_q.push({ f, edgeIdx, 0, heuristic(f, false) });
-            }
-            if (t != tgtFrom && t != -1) {
-                std::cerr << "     ADD to back con: " << t << std::endl;
-				backward_q.push({ t, edgeIdx, 0, heuristic(t, false) });
-            }
-		}
-    }
+    auto seedForward = [&](auto& q, auto& h) {
+        if (sourceNodeIdx.has_value()) {
+            q.push({ *sourceNodeIdx, -1, 0, h(*sourceNodeIdx, true) });
+        } else if (sourceEdgeIdx.has_value()) {
+            const auto& [srcFrom, srcTo] = g.edgeFromTos[*sourceEdgeIdx];
+            q.push({ srcFrom, -1, 0, h(srcFrom, true) });
+            if (srcTo != -1) q.push({ srcTo, -1, 0, h(srcTo, true) });
+        }
+    };
 
-    int meeting_node = -1;
-    bool found_path = false;
+    auto seedBackward = [&](auto& q, auto& h) {
+        if (targetNodeIdx.has_value()) {
+            q.push({ *targetNodeIdx, -1, 0, h(*targetNodeIdx, false) });
+        } else if (targetEdgeIdx.has_value()) {
+            const auto& [tgtFrom, tgtTo] = g.edgeFromTos[*targetEdgeIdx];
+            q.push({ tgtFrom, -1, 0, h(tgtFrom, false) });
+            if (tgtTo != -1) q.push({ tgtTo, -1, 0, h(tgtTo, false) });
+        }
+    };
 
-    while (!forward_q.empty() && !backward_q.empty() && !found_path) {
+    // ACTUAL BIDIRECTIONAL A* IMPLEMENTATION
+    std::priority_queue<SearchState, std::vector<SearchState>, std::greater<SearchState>> forwardQueue;
+    std::priority_queue<SearchState, std::vector<SearchState>, std::greater<SearchState>> backwardQueue;
+    
+    // Data structures for tracking search progress
+    std::vector<int> forwardCost(g.nodePoints.size(), INT_MAX);
+    std::vector<int> backwardCost(g.nodePoints.size(), INT_MAX);
+    std::vector<int> forwardParent(g.nodePoints.size(), -1);
+    std::vector<int> backwardParent(g.nodePoints.size(), -1);
+    std::vector<int> forwardParentEdge(g.nodePoints.size(), -1);
+    std::vector<int> backwardParentEdge(g.nodePoints.size(), -1);
+    
+    // Initialize queues
+    std::cerr << "AStar: fwd" << std::endl;
+    seedForward(forwardQueue, heuristic);
+    std::cerr << "AStar: bwd" << std::endl;
+    seedBackward(backwardQueue, heuristic);
+    
+    // Initialize costs for seeded nodes
+    if (sourceNodeIdx.has_value()) {
+      std::cerr << "AStar:  SRC fwdCost src:" << *sourceNodeIdx << "= 0" << std::endl;
+        forwardCost[*sourceNodeIdx] = 0;
+    } else if (sourceEdgeIdx.has_value()) {
+        const auto& [srcFrom, srcTo] = g.edgeFromTos[*sourceEdgeIdx];
+      std::cerr << "AStar:  SRCfrom fwdCost (" << srcFrom<<"->"<< srcTo << ")= 0" << std::endl;
+        forwardCost[srcFrom] = 0;
+        if (srcTo != -1) forwardCost[srcTo] = 0;
+    }
+    
+    if (targetNodeIdx.has_value()) {
+      std::cerr << "AStar:  TGT bwdCost tgt:" << *targetNodeIdx << "= 0" << std::endl;
+        backwardCost[*targetNodeIdx] = 0;
+    } else if (targetEdgeIdx.has_value()) {
+        const auto& [tgtFrom, tgtTo] = g.edgeFromTos[*targetEdgeIdx];
+      std::cerr << "AStar:  TGTbwdCost (" << tgtFrom <<"->"<< tgtTo << ")= 0" << std::endl;
+        backwardCost[tgtFrom] = 0;
+        if (tgtTo != -1) backwardCost[tgtTo] = 0;
+    }
+    
+    int meetingNode = -1;
+    int bestCost = INT_MAX;
+    
+    // Main search loop
+    while (!forwardQueue.empty() && !backwardQueue.empty()) {
         // Expand forward search
-        if (!forward_q.empty()) {
-            std::cerr << "  FORWARD" << std::endl;
-            auto f = forward_q.top();
-            forward_q.pop();
-
-            std::cerr << "  fwdCost:" << forward_cost[f.node] << " node: " << f.node << " cost:" << f.cost << " via: " << f.via_edge << std::endl;
-
-            if (f.cost >= forward_cost[f.node]) {
-                std::cerr << "   cost too much" << std::endl;
-                continue;
+        if (!forwardQueue.empty()) {
+            SearchState current = forwardQueue.top();
+            forwardQueue.pop();
+            
+            // Check if we found a better path to this node
+            if (current.cost > forwardCost[current.node]) continue;
+            
+            // Check if this node exists in backward search
+            if (backwardCost[current.node] < INT_MAX) {
+                int totalCost = current.cost + backwardCost[current.node];
+                if (totalCost < bestCost) {
+                    bestCost = totalCost;
+                    meetingNode = current.node;
+                }
             }
-            if (!allowedNodes.count(f.node)) {
-                std::cerr << "   Node not allowed" << std::endl;
-                continue;
-            }
-            std::cerr << "  store: " << f.node << " = cost: " << f.cost << " via: " << f.via_edge << std::endl;
-				
-            forward_cost[f.node] = f.cost;
-            forward_edge[f.node] = f.via_edge;
-
-            // Check for intersection
-            if (backward_cost[f.node] != INT_MAX) {
-                meeting_node = f.node;
-                found_path = true;
-                std::cerr << "  Found path. meet: " << meeting_node << std::endl;
-                break;
-            }
+            
             // Expand neighbors
-            for (const auto& [neighbor, edge] : g.forward_adj[f.node]) {
-                std::cerr << "    neighbor: " << neighbor << " edge:" << edge << std::endl;
-                if (!allowedEdges.count(edge)) continue;
-                int new_cost = f.cost + g.edgeCosts[edge];
-                std::cerr << "      allowed: newCost: " << new_cost << " fCost:" << f.cost << " + " << g.edgeCosts[edge] << std::endl;
-                if (new_cost < forward_cost[neighbor]) {
-                    forward_q.push({ neighbor, edge, new_cost, heuristic(neighbor, true) });
-                    std::cerr << "      => cheaper. Q up neigh: " << neighbor << " edge: " << edge << std::endl;
+            for (const auto& [neighbor, edgeIdx] : g.forward_adj[current.node]) {
+                // Check if edge and node are allowed
+                if (!allowedEdges.empty() && !allowedEdges.count(edgeIdx)) continue;
+                if (!allowedNodes.empty() && !allowedNodes.count(neighbor)) continue;
+                
+                int newCost = current.cost + g.edgeCosts[edgeIdx];
+                if (newCost < forwardCost[neighbor]) {
+                    forwardCost[neighbor] = newCost;
+                    forwardParent[neighbor] = current.node;
+                    forwardParentEdge[neighbor] = edgeIdx;
+                    int h = heuristic(neighbor, true);
+                    forwardQueue.push({neighbor, edgeIdx, newCost, h});
                 }
             }
         }
-
-        // Expand backward search
-        if (!backward_q.empty()) {
-            std::cerr << "  BACK" << std::endl;
-            auto b = backward_q.top();
-            backward_q.pop();
-
-            std::cerr << "  bckCost:" << backward_cost[b.node] << " node: " << b.node << " cost:" << b.cost << " via: " << b.via_edge << std::endl;
-
-            if (b.cost >= backward_cost[b.node]) continue;
-            if (!allowedNodes.count(b.node)) continue;
-            std::cerr << "  store: " << b.node << " = cost: " << b.cost << " via: " << b.via_edge << std::endl;
-
-            backward_cost[b.node] = b.cost;
-            backward_edge[b.node] = b.via_edge;
-
-            // Check for immediate intersection
-            if (forward_cost[b.node] != INT_MAX) {
-                meeting_node = b.node;
-                found_path = true;
-                std::cerr << "  BACK found path. meet: " << meeting_node << std::endl;
+        
+        // Expand backward search  
+        if (!backwardQueue.empty()) {
+          std::cerr << "AStar: bwd NOT empty: " << backwardQueue.size() << std::endl;
+            SearchState current = backwardQueue.top();
+            backwardQueue.pop();
+            
+            if (current.cost > backwardCost[current.node]) continue;
+            
+            // Check if this node exists in forward search
+            if (forwardCost[current.node] < INT_MAX) {
+                int totalCost = current.cost + forwardCost[current.node];
+                if (totalCost < bestCost) {
+                    bestCost = totalCost;
+                    meetingNode = current.node;
+                }
+            }
+            
+            // Expand neighbors in reverse direction
+            for (const auto& [neighbor, edgeIdx] : g.reverse_adj[current.node]) {
+                if (!allowedEdges.empty() && !allowedEdges.count(edgeIdx)) continue;
+                if (!allowedNodes.empty() && !allowedNodes.count(neighbor)) continue;
+                
+                int newCost = current.cost + g.edgeCosts[edgeIdx];
+                if (newCost < backwardCost[neighbor]) {
+                    backwardCost[neighbor] = newCost;
+                    backwardParent[neighbor] = current.node;
+                    backwardParentEdge[neighbor] = edgeIdx;
+                    int h = heuristic(neighbor, false);
+                    backwardQueue.push({neighbor, edgeIdx, newCost, h});
+                }
+            }
+        }
+        
+        // Early termination if we found a path and both queues have higher costs
+        if (meetingNode != -1) {
+          std::cerr << "AStar: => meetingNode: " << meetingNode << std::endl;
+            auto forwardTop = forwardQueue.empty() ? SearchState{-1, -1, INT_MAX, 0} : forwardQueue.top();
+            auto backwardTop = backwardQueue.empty() ? SearchState{-1, -1, INT_MAX, 0} : backwardQueue.top();
+            
+            if (forwardTop.cost + forwardTop.heuristic >= bestCost &&
+                backwardTop.cost + backwardTop.heuristic >= bestCost) {
                 break;
             }
-
-            // Expand neighbors (using reverse adjacency)
-            for (const auto& [neighbor, edge] : g.reverse_adj[b.node]) {
-                if (!allowedEdges.count(edge)) continue;
-                int new_cost = b.cost + g.edgeCosts[edge];
-                std::cerr << "      allowed: newCost: " << new_cost << " fCost:" << b.cost << " + " << g.edgeCosts[edge] << std::endl;
-                if (new_cost < backward_cost[neighbor]) {
-                    backward_q.push({
-                        neighbor,
-                        edge,
-                        new_cost,
-                        heuristic(neighbor, false)
-                        });
-                    std::cerr << "      => cheaper. BCK Q up neigh: " << neighbor << " edge: " << edge << std::endl;
-                }
-            }
         }
     }
-    if (!found_path) {
-        std::cerr << "=> NO PATH" << std::endl;
-        return {};
+    
+    // Reconstruct path if found
+    if (meetingNode == -1) return {};
+    
+    // Reconstruct forward path (source to meeting node)
+    std::cerr << "AStar: RECONSTRUCT FWD from meeting: " << meetingNode << std::endl;
+    std::vector<int> forwardPath;
+    int node = meetingNode;
+    while (forwardParent[node] != -1) {
+        forwardPath.push_back(forwardParentEdge[node]);
+        node = forwardParent[node];
     }
-
-	std::cerr << "=> MEETING NODE: " << meeting_node << std::endl;
-	std::cerr << "=> FWD PATH: " << forward_edge.size() << std::endl;
-	for (int i = 0; i < forward_edge.size(); ++i) {
-		if (forward_edge[i] != -1) std::cerr << "  fwd_edge[" << i << "] = " << forward_edge[i] << std::endl;
-	}
-	std::cerr << "=> BCK PATH: " << backward_edge.size() << std::endl;
-	for (int i = 0; i < backward_edge.size(); ++i) {
-		if (backward_edge[i] != -1) std::cerr << "  bck_edge[" << i << "] = " << backward_edge[i] << std::endl;
-	}
-
-    // Reconstruct path
-    if (meeting_node == -1) return {};
-
-    std::vector<int> path;
-    int current = meeting_node;
-    // Forward walk (meeting_node -> target)
-    //    Uses forward_edge[] to trace toward the target
-    current = meeting_node;
-    while (current != -1 && forward_edge[current] != -1) {
-        int idx = forward_edge[current];
-		std::cerr << "  FWD: " << idx << std::endl;
-        path.push_back(idx);
-        const auto& edge = g.edgeFromTos[idx];
-		std::cerr << "      => edge " << edge.first << " -> " << edge.second << std::endl;
-        current = (edge.first == current) ? edge.second : edge.first;
+    std::reverse(forwardPath.begin(), forwardPath.end());
+    std::cerr << "AStar: => fwdSize: " << forwardPath.size() << std::endl;
+    
+    // Reconstruct backward path (meeting node to target)
+    std::cerr << "AStar: RECONSTRUCT BWD from meeting: " << meetingNode << std::endl;
+    std::vector<int> backwardPath;
+    node = meetingNode;
+    while (backwardParent[node] != -1) {
+        backwardPath.push_back(backwardParentEdge[node]);
+        node = backwardParent[node];
     }
-    std::reverse(path.begin(), path.end());
-
-    // Backward walk (meeting_node -> source)
-    //    Uses backward_edge[] to trace toward the source
-    while (current != -1 && backward_edge[current] != -1) {
-        int idx = backward_edge[current];
-		std::cerr << "  BCK: " << idx << std::endl;
-        path.push_back(idx);
-        const auto& edge = g.edgeFromTos[idx];
-		std::cerr << "      => edge " << edge.first << " -> " << edge.second << std::endl;
-        current = (edge.first == current) ? edge.second : edge.first;
-    }
-
-    std::cerr << "=> PATH " << path.size() << ":  ";
-    for (const auto p : path) std::cerr << p << "  ";
-    std::cerr << std::endl;
-
-    return path;
+    std::cerr << "AStar: => bwdSize: " << forwardPath.size() << std::endl;
+    
+    // Combine paths
+    forwardPath.insert(forwardPath.end(), backwardPath.begin(), backwardPath.end());
+    return forwardPath;
 }
 
-std::vector<int> convertEdgesToNodePath(const SparseGraph& routingGraph, const std::vector<int>& edgePath, int sourceEdgeIdx)
+///////////////////////////////////////////////////////////////////////////////////////////
+// Path conversion
+///////////////////////////////////////////////////////////////////////////////////////////
+
+std::vector<int> convertEdgesToNodePath(
+    const SparseGraph& routingGraph,
+    const std::vector<int>& edgePath,
+    std::optional<int> sourceEdgeIdx,
+    std::optional<int> sourceNodeIdx)
 {
     std::vector<int> nodePath;
     if (edgePath.empty()) return nodePath;
     const auto& edges = routingGraph.edgeFromTos;
 
-    // 1. Determine direction of first edge relative to source
-    int firstEdge = edgePath[0];
-    int srcFrom = edges[sourceEdgeIdx].first;
-    int srcTo = edges[sourceEdgeIdx].second;
+    if (sourceNodeIdx.has_value()) {
+        nodePath.push_back(*sourceNodeIdx);
+    } else if (sourceEdgeIdx.has_value()) {
+        int firstEdge = edgePath[0];
+        int srcFrom = edges[*sourceEdgeIdx].first;
+        int srcTo   = edges[*sourceEdgeIdx].second;
 
-    bool isForward;
-    if (edges[firstEdge].first == srcFrom || edges[firstEdge].first == srcTo) {
-        isForward = true;
-    }
-    else if (edges[firstEdge].second == srcFrom || edges[firstEdge].second == srcTo) {
-        isForward = false;
-    }
-    else {
-        std::cout << "ERROR edge doesn't connect to source: 1st:" << firstEdge
-    	<< " (" << edges[firstEdge].first << "->" << edges[firstEdge].second << ")"
-    	<< " src: " << sourceEdgeIdx << " (" << srcFrom << "->" << srcTo << ")" << std::endl;
+        bool isForward;
+        if (edges[firstEdge].first == srcFrom || edges[firstEdge].first == srcTo) {
+            isForward = true;
+        }
+        else if (edges[firstEdge].second == srcFrom || edges[firstEdge].second == srcTo) {
+            isForward = false;
+        }
+        else {
+            std::cout << "ERROR edge doesn't connect to source" << std::endl;
+            return {};
+        }
+
+        if (isForward) {
+            nodePath.push_back(edges[firstEdge].first);
+            nodePath.push_back(edges[firstEdge].second);
+        } else {
+            nodePath.push_back(edges[firstEdge].second);
+            nodePath.push_back(edges[firstEdge].first);
+        }
+    } else {
+        std::cout << "ERROR: Must provide either sourceEdgeIdx or sourceNodeIdx" << std::endl;
+        return {};
     }
 
-    // 2. Add first edge's nodes
-    if (isForward) {
-        nodePath.push_back(edges[firstEdge].first);
-        nodePath.push_back(edges[firstEdge].second);
-        std::cerr << "FWD:  Add " << nodePath.front() << " " << nodePath.back() << std::endl;
-    }
-    else {
-        nodePath.push_back(edges[firstEdge].second);
-        nodePath.push_back(edges[firstEdge].first);
-        std::cerr << "BCK:  Add " << nodePath.front() << " " << nodePath.back() << std::endl;
-    }
-
-    // 3. Process subsequent edges
-    for (int i = 1; i < edgePath.size(); ++i) {
-		auto currentEdge = edgePath[i];
+    for (int i = (sourceNodeIdx ? 0 : 1); i < edgePath.size(); ++i) {
+        auto currentEdge = edgePath[i];
         int prevNode = nodePath.back();
 
         if (edges[currentEdge].first == prevNode) {
             nodePath.push_back(edges[currentEdge].second);
-			std::cerr << "   Addto " <<  nodePath.back() << std::endl;
-        }
-        else if (edges[currentEdge].second == prevNode) {
+        } else if (edges[currentEdge].second == prevNode) {
             nodePath.push_back(edges[currentEdge].first);
-			std::cerr << "   AddFrom " <<  nodePath.back() << std::endl;
-        }
-        else {
-			std::cout << "ERROR Non-contiguous edge path" << std::endl;
-			std::cerr << "ERROR Non-contiguous edge path" << std::endl;
+        } else {
+            std::cout << "ERROR Non-contiguous edge path" << std::endl;
+            break;
         }
     }
 
     return nodePath;
 }
 
-// Entry point function
-std::vector<int> findZonePath(const SparseGraph routingGraph,
+///////////////////////////////////////////////////////////////////////////////////////////
+// Same-zone routing methods (optimized with caching)
+///////////////////////////////////////////////////////////////////////////////////////////
+
+std::vector<int> findZoneNodeToNodePath(
+    const SparseGraph& routingGraph,
+    Router::RouteCtx* ctx,
     const std::vector<int>& zoneBases,
     const std::vector<int>& zoneEdges,
-    int sourceEdgeIdx,
-    int targetEdgeIdx)
+    int sourceNodeIdx,
+    int targetNodeIdx)
 {
-    std::cerr << "## Find ZonePathRoute fromEdge: " << sourceEdgeIdx << " toEdge: " << targetEdgeIdx << std::endl;
-    std::cerr << "   Using " << zoneEdges.size() << " zone edges and " << zoneBases.size() << " bases" << std::endl;
-    std::cerr << "   Edges:";
-    for (auto z : zoneEdges) std::cerr << "  " << z;
-    std::cerr << "\n   Bases:";
-    for (auto b : zoneBases) std::cerr << "  " << b;
-    std::cerr << std::endl;
+    if (ctx->lastRouteType == Router::RouteCtx::RouteType::NodeToNode &&
+        ctx->routeSrcNodeIdx == sourceNodeIdx &&
+        ctx->routeTgtNodeIdx == targetNodeIdx) {
+        return ctx->routeNodes;
+    }
 
-    // Create allowed sets
+    ctx->routeSrcNodeIdx = sourceNodeIdx;
+    ctx->routeTgtNodeIdx = targetNodeIdx;
+    ctx->lastRouteType   = Router::RouteCtx::RouteType::NodeToNode;
+
     std::unordered_set<int> allowedEdges(zoneEdges.begin(), zoneEdges.end());
     std::unordered_set<int> allowedNodes(zoneBases.begin(), zoneBases.end());
 
-    // Run bidirectional A*
-    const auto edgePath = bidirectionalAStar(
-        routingGraph,
-        sourceEdgeIdx,
-        targetEdgeIdx,
-        allowedEdges,
-        allowedNodes
+    auto edgePath = bidirectionalAStarFlexible(
+        routingGraph, sourceNodeIdx, std::nullopt, targetNodeIdx, std::nullopt,
+        allowedEdges, allowedNodes
     );
-    return convertEdgesToNodePath(routingGraph, edgePath, sourceEdgeIdx);
+
+    ctx->routeNodes = convertEdgesToNodePath(routingGraph, edgePath, std::nullopt, sourceNodeIdx);
+    return ctx->routeNodes;
 }
 
+std::vector<int> findZoneEdgeToNodePath(
+    const SparseGraph& routingGraph,
+    Router::RouteCtx* ctx,
+    const std::vector<int>& zoneBases,
+    const std::vector<int>& zoneEdges,
+    int sourceEdgeIdx,
+    int targetNodeIdx)
+{
+  std::cerr << "FZe2np: bases: " << zoneBases.size() << " edges: " << zoneEdges.size()
+    << " srcEdge: " << sourceEdgeIdx << " tgtNode: " << targetNodeIdx << std::endl;
+    if (ctx->lastRouteType == Router::RouteCtx::RouteType::EdgeToNode &&
+        ctx->routeSrcEdgeIdx == sourceEdgeIdx &&
+        ctx->routeTgtNodeIdx2 == targetNodeIdx) {
+    std::cerr << "FZe2np: => SAME ROUTE" << std::endl;
+        return ctx->routeNodes;
+    }
+
+    ctx->routeSrcEdgeIdx = sourceEdgeIdx;
+    ctx->routeTgtNodeIdx2 = targetNodeIdx;
+    ctx->lastRouteType    = Router::RouteCtx::RouteType::EdgeToNode;
+
+    std::unordered_set<int> allowedEdges(zoneEdges.begin(), zoneEdges.end());
+    std::unordered_set<int> allowedNodes(zoneBases.begin(), zoneBases.end());
+
+    auto edgePath = bidirectionalAStarFlexible(
+        routingGraph, std::nullopt, sourceEdgeIdx, targetNodeIdx, std::nullopt,
+        allowedEdges, allowedNodes
+    );
+    std::cerr << "FZe2np: AStar conv edges#: " << edgePath.size() << " to routeNodes" << std::endl;
+
+    ctx->routeNodes = convertEdgesToNodePath(routingGraph, edgePath, sourceEdgeIdx, std::nullopt);
+    return ctx->routeNodes;
 }
+
+///////////////////////////////////////////////////////////////////////////////////////////
+// Low-level routing with allowed sets
+///////////////////////////////////////////////////////////////////////////////////////////
+
+std::vector<int> findRouteWithAllowedSets(
+    const SparseGraph& routingGraph,
+    Router::RouteCtx* ctx,
+    const std::vector<int>& allowedNodes,
+    const std::vector<int>& allowedEdges,
+    std::optional<int> sourceNodeIdx,
+    std::optional<int> sourceEdgeIdx,
+    int targetNodeIdx)
+{
+    std::unordered_set<int> allowedNodesSet(allowedNodes.begin(), allowedNodes.end());
+    std::unordered_set<int> allowedEdgesSet(allowedEdges.begin(), allowedEdges.end());
+
+    auto edgePath = bidirectionalAStarFlexible(
+        routingGraph, sourceNodeIdx, sourceEdgeIdx, targetNodeIdx, std::nullopt,
+        allowedEdgesSet, allowedNodesSet
+    );
+
+    if (sourceNodeIdx.has_value()) {
+        return convertEdgesToNodePath(routingGraph, edgePath, std::nullopt, *sourceNodeIdx);
+    } else {
+        return convertEdgesToNodePath(routingGraph, edgePath, *sourceEdgeIdx, std::nullopt);
+    }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////
+// Zone pathfinding
+///////////////////////////////////////////////////////////////////////////////////////////
+
+std::vector<int> findZonePathBFS(const std::vector<GridType::ZoneInfo>& zones, 
+                                int sourceZoneId, int targetZoneId) {
+    if (sourceZoneId == targetZoneId) return {sourceZoneId};
+    
+    std::queue<int> q;
+    std::unordered_map<int, int> parent;
+    std::unordered_set<int> visited;
+    
+    q.push(sourceZoneId);
+    parent[sourceZoneId] = -1;
+    visited.insert(sourceZoneId);
+    
+    while (!q.empty()) {
+        int current = q.front();
+        q.pop();
+        
+        if (current == targetZoneId) {
+            // Reconstruct path
+            std::vector<int> path;
+            for (int zone = targetZoneId; zone != -1; zone = parent[zone]) {
+                path.push_back(zone);
+            }
+            std::reverse(path.begin(), path.end());
+            return path;
+        }
+        
+        for (int neighbor : zones[current].adjacentZones) {
+            if (visited.find(neighbor) == visited.end()) {
+                visited.insert(neighbor);
+                parent[neighbor] = current;
+                q.push(neighbor);
+            }
+        }
+    }
+    
+    return {}; // No path found
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////
+// Unified routing for all scenarios
+///////////////////////////////////////////////////////////////////////////////////////////
+
+std::vector<int> findRoute(
+    const SparseGraph& routingGraph,
+    Router::RouteCtx* ctx,
+    const std::vector<GridType::ZoneInfo>& zones,
+    const std::vector<GridType::AbstractEdge>& abstractEdges,
+    std::optional<int> sourceNodeIdx,
+    std::optional<int> sourceEdgeIdx,
+    int targetNodeIdx,
+    int sourceZoneId,
+    int targetZoneId,  
+    int zoneRelationship)
+{
+    // Case 1: Same zone
+    if (zoneRelationship == -1) {
+      std::cerr << "FR: Same srcZone: " << sourceZoneId << std::endl;
+        const auto& zone = zones[sourceZoneId];
+        
+        if (sourceNodeIdx.has_value()) {
+        std::cerr << "FR:   Find NodeToPath" << std::endl;
+            return findZoneNodeToNodePath(routingGraph, ctx, 
+                                        zone.baseNodeIdxs, zone.baseEdgeIdxs,
+                                        *sourceNodeIdx, targetNodeIdx);
+        } else {
+        std::cerr << "FR:   Find EdgeToPath" << std::endl;
+            return findZoneEdgeToNodePath(routingGraph, ctx,
+                                        zone.baseNodeIdxs, zone.baseEdgeIdxs,
+                                        *sourceEdgeIdx, targetNodeIdx);
+        }
+    }
+    
+    // Case 2: Adjacent zones
+    if (zoneRelationship >= 0) {
+      std::cerr << "FR: Adjacent srcZ: " << sourceZoneId << " tgtZ:: " << targetZoneId << std::endl;
+        const auto& sourceZone = zones[sourceZoneId];
+        const auto& targetZone = zones[targetZoneId];
+        
+        // Combine both zones
+        std::vector<int> allowedNodes = sourceZone.baseNodeIdxs;
+        allowedNodes.insert(allowedNodes.end(), targetZone.baseNodeIdxs.begin(), targetZone.baseNodeIdxs.end());
+        
+        std::vector<int> allowedEdges = sourceZone.baseEdgeIdxs;
+        allowedEdges.insert(allowedEdges.end(), targetZone.baseEdgeIdxs.begin(), targetZone.baseEdgeIdxs.end());
+        
+      std::cerr << "FR:   FindWithAllSets. nodes:" << allowedNodes.size() << " edges: " << allowedEdges.size() << std::endl;
+        return findRouteWithAllowedSets(routingGraph, ctx, allowedNodes, allowedEdges,
+                                      sourceNodeIdx, sourceEdgeIdx, targetNodeIdx);
+    }
+    
+    // Case 3: Distant zones
+    std::cerr << "FR: Distant: " << sourceZoneId << " tgtZ:: " << targetZoneId << std::endl;
+    std::vector<int> zonePath = findZonePathBFS(zones, sourceZoneId, targetZoneId);
+    if (zonePath.empty()) {
+    std::cerr << "FR:   => EMPTY" << std::endl;
+        return {};
+    }
+    
+    // Combine all zones along the path
+    std::vector<int> allowedNodes, allowedEdges;
+    std::cerr << "FR: Make sets for " << zonePath.size() << " zones" << std::endl;
+    for (int zoneId : zonePath) {
+        const auto& zone = zones[zoneId];
+        std::cerr << "  Add zone: " << zoneId
+          << " nodes: " << zone.baseNodeIdxs.size()
+          << " edges: " << zone.baseEdgeIdxs.size()
+          << std::endl;
+        std::cerr << "      nodes: ";
+        for (auto z : zone.baseNodeIdxs) {
+          std::cerr << z << " ";
+        }
+        std::cerr << std::endl << "      edges: ";
+        for (auto e : zone.baseEdgeIdxs) {
+          std::cerr << e << " ";
+        }
+        std::cerr << std::endl;
+        allowedNodes.insert(allowedNodes.end(), zone.baseNodeIdxs.begin(), zone.baseNodeIdxs.end());
+        allowedEdges.insert(allowedEdges.end(), zone.baseEdgeIdxs.begin(), zone.baseEdgeIdxs.end());
+    }
+    
+      std::cerr << "FR:   Made sets. nodes:" << allowedNodes.size() << " edges: " << allowedEdges.size() << std::endl;
+    return findRouteWithAllowedSets(routingGraph, ctx, allowedNodes, allowedEdges,
+                                  sourceNodeIdx, sourceEdgeIdx, targetNodeIdx);
+}
+
+} // namespace Routing

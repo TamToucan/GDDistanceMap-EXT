@@ -21,7 +21,6 @@
 #include <string>
 
 #include "AbstractMST.hpp"
-#include "gdextension_interface.h"
 #include "ZSThinning.hpp"
 #include "MathUtils.h"
 
@@ -373,6 +372,7 @@ void debugGridEdges(const Graph& graphs) { }
 void debugAbstractNodes(int pass, const AbstractLevel& ablv, const Graph& graph) { }
 void debugAbstractEdges(int pass, const AbstractLevel& ablv, const Graph& graph, const char* fname) { }
 void debugZones(int pass, const AbstractLevel& ablv, const Graph& graph) { }
+void debugZoneEdges(int pass, const AbstractLevel& ablv, const Graph& graph) { }
 void debugZoneBoundaries(int pass, const AbstractLevel& ablv) { }
 #else
 void writeGridToFile(const std::vector<std::vector<int>>& grid, const std::string& filename);
@@ -442,12 +442,9 @@ std::vector<Point> detectNodes(const Grid& grid)
             if (grid[y+1][x+1]) {
             	// Get the ID from the 9 (3x3) bits and check if a pattern exists
             	int id = getPatternID(grid, x, y);
-				std::cerr << "XXXX " << x+1 << "," << y+1 << " SET, ID " << std::hex << id << std::dec << std::endl;
             	if (patternIDS[id]) {
             		// Pattern exists (so it was a match) => store the Node
                 	nodes.push_back({x+1, y+1});
-					std::cerr << "    XXXX BASENODE: " << x+1 << "," << y+1 << std::endl;
-                    
             	}
             }
         }
@@ -459,9 +456,9 @@ std::vector<Point> detectNodes(const Grid& grid)
 ///////////////////////////////////////////////////////////
 
 namespace {
+#ifndef NO_DEBUG
 	void makeTGA2(const char* name, const Grid& grid, unsigned int mask)
 	{
-#if 1
 		unsigned char* pPixel = new unsigned char[grid.size()*grid[0].size()*4];
 		unsigned char* pData = pPixel;
 		for (int y=grid.size()-1; y>= 0; --y) {
@@ -559,8 +556,7 @@ namespace {
 		}
 		bool ret = Stuff::TGA::saveToFile(name, grid[0].size(), grid.size(), 32, pPixel);
 		delete[] pPixel;
-		std::cerr << "XXXX " << name << " => " << (ret ? "saved" : "*FAILED*") << std::endl;
-#endif
+		std::cerr << "TGA: " << name << " => " << (ret ? "saved" : "*FAILED*") << std::endl;
 	}
 	void makeTGA(const char* name, const Grid& grid, bool preProcess=false)
 	{
@@ -568,6 +564,10 @@ namespace {
 		unsigned int mask = preProcess ? 0xffff :  0xffff0000;
 		makeTGA2(name, grid, mask);
 	}
+#else
+	void makeTGA2(const char* name, const Grid& grid, unsigned int mask) { }
+	void makeTGA(const char* name, const Grid& grid, bool preProcess=false) { }
+#endif
 }
 
 /////////////////////////////////////////////////////////////////////////////////////////
@@ -2107,7 +2107,7 @@ Graph makeGraph(const Grid& floorGrid)
 			}
             std::cerr << std::endl;
 		}
-        std::cerr << "#############" << std::endl;
+    std::cerr << "#############" << std::endl;
 	}
 
     //
@@ -2299,10 +2299,47 @@ void debugZoneBoundaries(int pass, const AbstractLevel& ablv)
 void debugDump(const Graph& graph)
 {
 	Grid tempGrid(graph.infoGrid);
+
+    int l=0;
+    std::cerr << "############ LEVELS " << std::endl;
+    for (const auto& ablv : graph.abstractLevels) {
+            int z=0;
+            for (const auto& srcZoneInfo : ablv.zones) {
+                std::cerr << "ablv: " << l << " z: " << z << " b: ";
+                for (int b : srcZoneInfo.baseNodeIdxs) {
+                    std::cerr << " " << b;
+                }
+                std::cerr << std::endl;
+                std::cerr << "ablv: " << l << " z: " << z << " e: ";
+                for (int e : srcZoneInfo.baseEdgeIdxs) {
+                    std::cerr << " " << e;
+                }
+                std::cerr << std::endl;
+                ++z;
+            }
+            ++l;
+    }
+
+
+
+
+    std::cerr << "############ NODES" << std::endl;
+    for (int i=0; i < graph.baseNodes.size(); ++i) {
+        const auto& n = graph.baseNodes[i];
+        std::cerr << i << "  " << n.first <<"," << n.second << std::endl;
+    }
+    std::cerr << "############ EDGES" << std::endl;
+    for (int i=0; i < graph.baseEdges.size(); ++i) {
+        const auto& e = graph.baseEdges[i];
+        std::cerr << i << "  " << e.from <<"->" << e.to << (e.toDeadEnd ? " DE" : " ");
+        for (const auto p: e.path) {
+            std::cerr << "  " << p.first <<","<< p.second << " ";
+        }
+        std::cerr << std::endl;
+    }
     int lv = 0;
     for (const auto& ablv : graph.abstractLevels)
 	{
-
 		std::cerr << "########################################################" << std::endl;
 		std::cerr << "## ABSTRACT LEVEL " << lv << std::endl;
 		std::cerr << "Abstract Nodes:  " << ablv.abstractNodes.size() << std::endl;
@@ -2563,6 +2600,7 @@ void debugDump(const Graph& graph)
 			}
 			std::cerr << " " << row << std::endl;
 		}
+        ++lv;
 	}
 }
 #endif
@@ -2613,6 +2651,7 @@ std::vector<std::vector<int>> readGridFromFile(const std::string& filename)
     return grid;
 }
 
+#ifndef NO_DEBUG
 void debugZoneEdges(int pass, const AbstractLevel& ablv, const Graph& graph)
 {
 	std::cerr << "## ZONE EDGES DETAILED DUMP" << std::endl;
@@ -2678,6 +2717,7 @@ void debugZoneEdges(int pass, const AbstractLevel& ablv, const Graph& graph)
 		std::cerr << "---" << std::endl;
 	}
 }
+#endif
 
 } // namespace
 

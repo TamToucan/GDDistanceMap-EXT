@@ -76,7 +76,8 @@ add_custom_command(TARGET testMain POST_BUILD
 
 ##############################
 
-target_compile_definitions(${LIB_NAME} PRIVATE ${PROJECT_NAME}_EXPORTS)
+# target_compile_definitions(${LIB_NAME} PRIVATE GDDISTANCEMAP ${PROJECT_NAME}_EXPORTS)
+target_compile_definitions(${LIB_NAME} PRIVATE GDDISTANCEMAP_EXPORTS)
 
 # Output directory and DLL copy logic
 set(LOTT_ADDON_DIR "D:/git/the-lott/addons/gddistanceMap/bin")

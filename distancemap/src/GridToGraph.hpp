@@ -64,7 +64,8 @@
 // belongs to the zone or not (zones are any shape remember).
 // Finally, and most importantly it creates a costFlowField for EACH neighbor
 // zone than can be reached.
-// So Zone3 subgrid would have 1 costFlowField
+// So Zone3 subgrid would have 1 costFlowField since it is adjacent to Zone2
+//
 //
 
 namespace GridToGraph {
@@ -88,9 +89,9 @@ struct AbstractLevel
 {
     std::vector<AbstractEdge> abstractEdges;
     std::vector<AbstractNode> abstractNodes;
-    ZoneGrid zoneGrid;
+    GridType::ZoneGrid zoneGrid;
 	std::vector<FlowField::SubGrid> subGrids;
-	std::vector<ZoneInfo> zones;
+	std::vector<GridType::ZoneInfo> zones;
 };
 
 // Map of ALL BaseFromIdx,BaseToIdx pairs returning the total length of path
