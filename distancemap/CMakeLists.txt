@@ -22,7 +22,7 @@ target_link_libraries(${LIB_NAME}
     PRIVATE MathStuff
     PRIVATE Stuff
     PRIVATE Algo
-    PRIVATE GDTracker
+    PRIVATE GDTracker::Tracker
     PUBLIC godot::cpp)
 
 ##############################
@@ -51,7 +51,7 @@ target_link_libraries(testMain
     PRIVATE MathStuff
     PRIVATE Stuff
     PRIVATE Algo
-    PRIVATE GDTracker
+    PRIVATE GDTracker::Tracker
     PRIVATE GDDistanceMap
     PUBLIC godot::cpp)
 

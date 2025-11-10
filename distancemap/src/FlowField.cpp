@@ -17,6 +17,8 @@
 #include "GridTypes.hpp"
 #include "GridToGraph.hpp"
 
+#include "Debug.h"
+
 namespace FlowField {
 
 // Maximum cost (our cost type is uint8_t, so 255 is max).
@@ -53,7 +55,8 @@ SubGrid extractZoneSubGrid(const std::vector<std::vector<GridType::GridPointInfo
 			}
 		}
 	}
-	std::cerr << "Zone: " << targetZone << " bounding box: (" << minX << ", " << minY << ") to (" << maxX << ", " << maxY << ")" << std::endl;
+	LOG_DEBUG("Zone: " << targetZone << " bounding box: (" << minX << ", " << minY << ")"
+		<< "to(" << maxX << ", " << maxY << ")");
 
 	// Validate that we found at least one cell for the zone.
 	if (maxX < minX || maxY < minY)
@@ -210,34 +213,37 @@ void generateFlowGrids(GridToGraph::Graph& graph)
 	const int rows = graph.infoGrid.size();
 	const int cols = graph.infoGrid[0].size();
 
-	std::cerr << "## SUBS: AbstractLevels: " << graph.abstractLevels.size() << std::endl;
+	LOG_INFO("##GenerateFlowGrids from AbstractLevels: " << graph.abstractLevels.size());
 	for (int i = 0; i < graph.abstractLevels.size(); ++i) {
 		auto& ablv = graph.abstractLevels[i];
-		std::cerr << "  == Get subgrid bounding box for level: " << i << std::endl;
+		LOG_DEBUG("== Get subgrid bounding box for level: " << i);
 		for (int zi = 0; zi < ablv.zones.size(); ++zi) {
 			auto subgrid = extractZoneSubGrid(ablv.zoneGrid, graph.infoGrid, zi);
 			ablv.subGrids.push_back(subgrid);
 		}
-		std::cerr << "  => AbstractLevel: " << i << " subgrids: " << ablv.subGrids.size() << std::endl;
+		LOG_DEBUG("==> AbstractLevel: " << i << " subgrids: " << ablv.subGrids.size());
 	}
 
-	std::cerr << "## FLOW: AbstractLevels: " << graph.abstractLevels.size() << std::endl;
+	LOG_DEBUG("## FLOW: AbstractLevels: " << graph.abstractLevels.size());
 	for (int levIdx=0; levIdx < graph.abstractLevels.size(); ++levIdx) {
 		auto& ablv = graph.abstractLevels[levIdx];
-	    std::cerr << "  AbstractLevel: " << levIdx << " zones: " << ablv.zones.size() << std::endl;
+		LOG_DEBUG("  AbstractLevel: " << levIdx << " zones: " << ablv.zones.size());
 		for (int zi = 0; zi < ablv.zones.size(); ++zi) {
 			auto& subGrid = ablv.subGrids[zi];
 			const auto& adjZones = ablv.zones[zi].adjacentZones;
-			std::cerr << "    Zone: " << zi << " subGrid: " << subGrid.offsetX<<", "<<subGrid.offsetY <<" "<<subGrid.width<<"x"<<subGrid.height
-				<< " adjZones: " << adjZones.size() << std::endl;
+			LOG_DEBUG("    Zone: " << zi << " subGrid: " << subGrid.offsetX << ", " << subGrid.offsetY
+				<< " " << subGrid.width << "x" << subGrid.height
+				<< " adjZones: " << adjZones.size());
 			for (int ni = 0; ni < adjZones.size(); ++ni) {
 				int adjZone = adjZones[ni];
 				const auto& boundaryCells = ablv.zones[zi].zoneBoundaryCellMap[adjZone];
 				auto localSinks = convertSinksToLocal(boundaryCells, subGrid);
 
-				std::cerr << "      zone:" << adjZone << " sinks: " << localSinks.size() << std::endl;
+				LOG_DEBUG("      zone:" << adjZone << " sinks: " << localSinks.size());
 				for (const auto& bi : localSinks) {
-					std::cerr << "        sink: " << (bi.sink.first+subGrid.offsetX) << "," << (bi.sink.second+subGrid.offsetY) << " dir: " << bi.exitDirIdx << std::endl;
+					LOG_DEBUG("        sink: " << (bi.sink.first + subGrid.offsetX) << ","
+						<< (bi.sink.second + subGrid.offsetY)
+						<< " dir: " << bi.exitDirIdx);
 				}
 				subGrid.costFlowFields.push_back({ adjZone, generateFlowFieldDial(subGrid, localSinks) });
 				debugFlow(levIdx, zi, adjZone, subGrid);

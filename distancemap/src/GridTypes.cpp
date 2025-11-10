@@ -2,6 +2,8 @@
 #include <queue>
 #include <iostream>
 
+#include "Debug.h"
+
 namespace GridType
 {
 
@@ -19,7 +21,7 @@ std::vector<int> checkConnectivity(const BaseGraph& graph, int numBaseNodes)
 		}
 	}
 	if (startNode == -1) {
-		std::cerr << "Error: No base nodes with edges found!\n";
+		LOG_DEBUG("Error: No base nodes with edges found!");
 		return result;
 	}
 
@@ -57,7 +59,7 @@ std::vector<int> checkConnectivity(const BaseGraph& graph, int numBaseNodes)
 //
 BaseGraph buildBaseGraph(const std::vector<Edge>& edges, int numBaseNodes)
 {
-	std::cerr << "## BuildBaseGraph: " << numBaseNodes << std::endl;
+	LOG_INFO("## BuildBaseGraph: " << numBaseNodes);
 	BaseGraph graph;
 	graph.assign(numBaseNodes, std::vector<BaseGraphInfo>());
 	for (int i = 0; i < static_cast<int>(edges.size()); i++) {

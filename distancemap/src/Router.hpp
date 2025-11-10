@@ -12,12 +12,18 @@
 namespace Router {
 
 struct RouteCtx {
-    int type;
+    int type = -1;
     float curDir;
     GridType::Point from;
 	GridType::Point to;
     GridType::Point next;
     std::vector<int> routeNodes;
+
+    // Limit number of times can keep reusing previous direction
+    // before re-routing
+    int reuseInit = 0; 
+    int reuseCnt = reuseInit;
+    bool didReuse = false;
 
     // Cache for each type
     int routeSrcNodeIdx = -1;

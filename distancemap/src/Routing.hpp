@@ -29,9 +29,10 @@ namespace Routing {
 
 // SparseGraph structure with hierarchical information
 struct SparseGraph {
-    // Base graph adjacency
-    std::vector<std::vector<std::pair<int, int>>> forward_adj;  // node -> { otherNode, edge_idx }
-    std::vector<std::vector<std::pair<int, int>>> reverse_adj;  // otherNode -> { node, edge_idx }
+    // Base graph adjacency (not deadEnds)
+    std::vector<std::vector<std::pair<int, int>>> forwardConnections;  // node -> [ { otherNode, edge_idx },... ]
+    std::vector<std::vector<std::pair<int, int>>> reverseConnections;  // otherNode -> [ { node, edge_idx },... ]
+    std::unordered_map<int, std::pair<int, int>>  deadendConnection;   // deadNode -> { node , edge_idx }
     
     // Edge-node mappings
     std::vector<std::vector<int>> nodeToEdgeIdxs;
@@ -46,6 +47,21 @@ struct SparseGraph {
     std::vector<int> nodeToZone;                    // baseNode -> zoneId
     std::vector<std::vector<int>> zoneToNodes;      // zoneId -> [baseNodes]
     std::vector<std::vector<int>> zoneToEdges;      // zoneId -> [baseEdges]
+
+    int getEdgeFromNodes(int n1, int n2) const {
+        const auto& connections = forwardConnections[n1];
+        for (const auto& nodeEdge : connections) {
+            if (nodeEdge.first == n2) {
+                return nodeEdge.second;
+            }
+        }
+        return -1;
+    }
+    
+    int getEdgeFromDead(int deadIdx) const {
+        auto it = deadendConnection.find(deadIdx);
+        return (it != deadendConnection.end()) ? it->second.second : -1;
+    }
     
     // Helper methods
     int getNodeZone(int nodeIdx) const {
@@ -67,6 +83,7 @@ struct SparseGraph {
 // Core graph building functions
 MathStuff::Grid2D<uint32_t> makeEdgeGrid(const std::vector<GridType::Edge> edges, const GridType::Grid& grid);
 SparseGraph buildSparseGraph(const std::vector<GridType::Point>& baseNodes, 
+                            const std::vector<GridType::Point>& deadEnds, 
                             const std::vector<GridType::Edge>& baseEdges,
                             const GridType::Grid& infoGrid);
 

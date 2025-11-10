@@ -6,14 +6,17 @@
 
 #include <GDDistanceMap.hpp>
 
+#include "Debug.h"
+
 using namespace godot;
 
 void initialize_libgddistanceMap(ModuleInitializationLevel p_level) {
 	if (p_level != MODULE_INITIALIZATION_LEVEL_CORE) {
 		return;
 	}
+	SET_DEBUG("ALL");
+	LOG_INFO("################# REGISTER GDDistanceMap");
 	ClassDB::register_class<GDDistanceMap>();
-	std::cout << "################# REGISTER GDDistanceMap" << std::endl;
 }
 
 void uninitialize_libgddistanceMap(ModuleInitializationLevel p_level) {

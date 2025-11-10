@@ -24,6 +24,7 @@
 #include "ZSThinning.hpp"
 #include "MathUtils.h"
 
+#include "Debug.h"
 #include "TGA.hpp"
 
 using namespace GridType;
@@ -365,6 +366,7 @@ inline bool isPath(int cellValue) {
     // (assuming only one bit is set for PATH, or that PATH is bit 1)
     return cellValue && !isNode(cellValue);
 }
+
 #ifdef NO_DEBUG
 void writeGridToFile(const std::vector<std::vector<int>>& grid, const std::string& filename) { }
 void debugDump(const Graph& graph) { }
@@ -374,6 +376,7 @@ void debugAbstractEdges(int pass, const AbstractLevel& ablv, const Graph& graph,
 void debugZones(int pass, const AbstractLevel& ablv, const Graph& graph) { }
 void debugZoneEdges(int pass, const AbstractLevel& ablv, const Graph& graph) { }
 void debugZoneBoundaries(int pass, const AbstractLevel& ablv) { }
+void debugExpandedPaths(const Grid& grid) { }
 #else
 void writeGridToFile(const std::vector<std::vector<int>>& grid, const std::string& filename);
 void debugDump(const Graph& graph);
@@ -383,6 +386,7 @@ void debugAbstractEdges(int pass, const AbstractLevel& ablv, const Graph& graph,
 void debugZones(int pass, const AbstractLevel& ablv, const Graph& graph);
 void debugZoneEdges(int pass, const AbstractLevel& ablv, const Graph& graph);
 void debugZoneBoundaries(int pass, const AbstractLevel& ablv);
+void debugExpandedPaths(const Grid& grid);
 #endif
 
 void extraThining(Grid& grid) {
@@ -556,7 +560,7 @@ namespace {
 		}
 		bool ret = Stuff::TGA::saveToFile(name, grid[0].size(), grid.size(), 32, pPixel);
 		delete[] pPixel;
-		std::cerr << "TGA: " << name << " => " << (ret ? "saved" : "*FAILED*") << std::endl;
+        LOG_DEBUG("TGA: " << name << " => " << (ret ? "saved" : "*FAILED*"));
 	}
 	void makeTGA(const char* name, const Grid& grid, bool preProcess=false)
 	{
@@ -660,16 +664,16 @@ Path simplifyPath(const Path& inPath) {
         // Check if "prev -> next" is a valid diagonal move
         int dx = next.first - prev.first;
         int dy = next.second - prev.second;
-        std::cerr << "SIMPLIFY: " << dx << "" << dy;
+        LOG_DEBUG("SIMPLIFY: " << dx << "" << dy);
         if (std::abs(dx) <= 1 && std::abs(dy) <= 1) {
             // Skip the current point (diagonal move is valid)
             simplePath.push_back(next);
             i++;
-			std::cerr << "   => skip " << curr.first<<","<<curr.second<< std::endl;
+            LOG_DEBUG("   => skip " << curr.first << "," << curr.second);
         }
         else {
             simplePath.push_back(curr);
-			std::cerr << "   => keep " << curr.first<<","<<curr.second<< std::endl;
+            LOG_DEBUG("   => keep " << curr.first << "," << curr.second);
         }
     }
 
@@ -719,15 +723,17 @@ public:
 
 		auto itr = edges.find(newEdge);
 		if (itr != edges.end()) {
-			std::cerr << "#AddEdge DUP EDGE: " << newEdge.from <<"->"<<newEdge.to << (newEdge.toDeadEnd ? " (DEAD)" : "") << " P: ";
-			for (const auto& p : newEdge.path) { std::cerr << p.first <<","<< p.second << "  "; }
-			std::cerr << std::endl;
+            LOG_DEBUG_CONT("#AddEdge DUP EDGE: " << newEdge.from << "->" << newEdge.to
+                << (newEdge.toDeadEnd ? " (DEAD)" : "") << " P: ");
+			LOG_DEBUG_FOR(const auto& p : newEdge.path,
+                p.first << "," << p.second << "  ");
 			return false;
 		}
 
-		std::cerr << "#AddSEdge STORE: " << newEdge.from <<"->"<< newEdge.to << (newEdge.toDeadEnd ? " (DEAD)" : "") << " P: ";
-		for (const auto& p : newEdge.path) { std::cerr << p.first <<","<< p.second << "  "; }
-		std::cerr << std::endl;
+        LOG_DEBUG_CONT("#AddSEdge STORE: " << newEdge.from << "->" << newEdge.to
+            << (newEdge.toDeadEnd ? " (DEAD)" : "") << " P: ");
+		LOG_DEBUG_FOR(const auto& p : newEdge.path,
+            p.first << "," << p.second << "  ");
 
 		edges.insert(itr, newEdge);
 		return true;
@@ -738,7 +744,7 @@ private:
 	bool getEdge(Path& path, Edge& newEdge)
 	{
 		if (path.empty()) {
-			std::cerr << "getEdge => EMPTY" << std::endl;
+            LOG_DEBUG("getEdge => EMPTY");
 			return false;
 		}
 		int sx = path[0].first;
@@ -759,8 +765,8 @@ private:
 		// Should not both be dead and if Node0 == Node1 then one must be a deadEnd
 		bool startEndOk = (!bothDead) && ((node0 != node1) || isDeadEnd);
 		if (! startEndOk) {
-			std::cerr << "#GetEdge START = END: " << (isDead0 ? "DEAD " : "") << node0
-					<< " == " << (isDead1 ? "DEAD " : "") << node1 << std::endl;
+            LOG_DEBUG("#GetEdge START = END: " << (isDead0 ? "DEAD " : "") << node0
+                << " == " << (isDead1 ? "DEAD " : "") << node1);
 			return false;
 		}
 
@@ -773,20 +779,18 @@ private:
             						: std::make_pair(node1,node0);
 
 			if (adjacentNodePairs.count(edge)) {
-				std::cerr << "#GetEdge DUP: " << (isDeadEnd ? "DEAD " : "") << edge.first <<" to "<< edge.second << std::endl;
+                LOG_DEBUG("#GetEdge DUP: " << (isDeadEnd ? "DEAD " : "") << edge.first << " to " << edge.second);
 				return false;
 			}
 			adjacentNodePairs.insert(edge);
 		}
 
-		std::cerr << "#GetEdge " << ((startRC&DEND) ? "DEND " : "NODE ") << (startRC&0xffff)
-											<< " -> "
-											<< ((endRC&DEND) ? "DEND " : "NODE ") << (endRC&0xffff)
-											<< "   P: ";
-		for (const auto& p : path) {
-			std::cerr << "  " << p.first <<","<< p.second;
-		}
-		std::cerr << std::endl;
+        LOG_DEBUG_CONT("#GetEdge " << ((startRC & DEND) ? "DEND " : "NODE ") << (startRC & 0xffff)
+            << " -> "
+            << ((endRC & DEND) ? "DEND " : "NODE ") << (endRC & 0xffff)
+            << "   P: ");
+		LOG_DEBUG_FOR(const auto& p : path,
+            "  " << p.first << "," << p.second);
 
 		// Ensure Node1 is the dead, or if none dead then node0 is the lower
 		if (isDead0 || (!isDeadEnd && (node0 > node1))) {
@@ -799,16 +803,12 @@ private:
 		Path simplePath = simplifyPath(path);
 
 		if (simplePath.size() != path.size()) {
-			std::cerr << "#GetEdge INPUT  ";
-			for (const auto& p : path) {
-				std::cerr << "  " << p.first <<","<< p.second;
-			}
-			std::cerr << std::endl;
-			std::cerr << "#GetEdge SIMPLE ";
-			for (const auto& p : simplePath) {
-				std::cerr << "  " << p.first <<","<< p.second;
-			}
-			std::cerr << std::endl;
+            LOG_DEBUG_CONT("#GetEdge INPUT  ");
+			LOG_DEBUG_FOR(const auto& p : path,
+                "  " << p.first << "," << p.second);
+            LOG_DEBUG_CONT("#GetEdge SIMPLE ");
+			LOG_DEBUG_FOR(const auto& p : simplePath,
+                "  " << p.first << "," << p.second);
 		}
 
 		// Make the new Edge to add
@@ -873,14 +873,14 @@ Path followPath(int startX, int startY,
         if (grid[ny][nx] == 0) continue;   // EMPTY
         if (isPath(grid[ny][nx]) && tempVisited[ny][nx])
         {
-        	std::cerr << "  " << nx<<","<<ny<< " => Visited (or Node" << std::endl;
+            LOG_DEBUG("  " << nx << "," << ny << " => Visited (or Node");
         	continue; // Already visited path cell
         }
 
         // FORWARD PATH: from neighbor
         std::deque<std::pair<int,int>> forwardPath;
         std::pair<int,int> fwd = {nx, ny};
-        std::cerr << "  => FWD Start " << fwd.first <<"," << fwd.second << std::endl;
+        LOG_DEBUG("  => FWD Start " << fwd.first << "," << fwd.second);
 
         while (true)
         {
@@ -888,7 +888,7 @@ Path followPath(int startX, int startY,
             if (isPath(grid[fwd.second][fwd.first]) && !tempVisited[fwd.second][fwd.first])
             {
                 markPathVisited(fwd.first, fwd.second);
-                std::cerr << "    VISIT " << fwd.first <<"," << fwd.second << std::endl;
+                LOG_DEBUG("    VISIT " << fwd.first << "," << fwd.second);
             }
 
             forwardPath.push_back(fwd);
@@ -903,9 +903,9 @@ Path followPath(int startX, int startY,
                 		if (isPath(grid[p.second][p.first])) tempVisited[p.second][p.first] = false;
                 	}
                     forwardPath.clear();
-                    std::cerr << "    LOOP => clear path" << std::endl;
+                    LOG_DEBUG("    LOOP => clear path");
                 }
-                std::cerr << "  NODE " << fwd.first <<"," << fwd.second << " => BREAK" << std::endl;
+                LOG_DEBUG("  NODE " << fwd.first << "," << fwd.second << " => BREAK");
                 break;
             }
 
@@ -918,7 +918,7 @@ Path followPath(int startX, int startY,
                 // Skip empty or visited path
                 if (grid[fy][fx] == 0) continue;
                 if (isPath(grid[fy][fx]) && tempVisited[fy][fx]) continue;
-                std::cerr << "    " << fx << "," << fy << " => Not visited (or is Node) => BREAK" << std::endl;
+                LOG_DEBUG("    " << fx << "," << fy << " => Not visited (or is Node) => BREAK");
                 // We found an unvisited path or a node => move forward
                 fwd = {fx, fy};
                 foundNext = true;
@@ -926,9 +926,9 @@ Path followPath(int startX, int startY,
             }
             if (!foundNext) {
                 // Could not proceed to any next cell => path fails
-                std::cerr << "  NOT FOUND => clear: ";
-                for (const auto p : forwardPath) { std::cerr << p.first <<","<< p.second << "  "; }
-                std::cerr << std::endl;
+                LOG_DEBUG("  NOT FOUND => clear: ");
+                LOG_DEBUG_FOR(const auto p : forwardPath,
+                    p.first << "," << p.second << "  ");
                 forwardPath.clear();
                 break;
             }
@@ -936,7 +936,7 @@ Path followPath(int startX, int startY,
 
         // If forwardPath is empty => that direction failed, try next direction
         if (forwardPath.empty()) {
-        	std::cerr << "  EMPTY => Continue" << std::endl;
+            LOG_DEBUG("  EMPTY => Continue");
             continue;
         }
 
@@ -946,20 +946,20 @@ Path followPath(int startX, int startY,
 
         while (true)
         {
-        	std::cerr << "  BCK " << bck.first <<","<< bck.second << std::endl;
+            LOG_DEBUG("  BCK " << bck.first << "," << bck.second);
             // If it's PATH, mark visited
             if (((grid[bck.second][bck.first] & (NODE|DEND)) == 0) // is PATH
                 && !tempVisited[bck.second][bck.first])
             {
                 markPathVisited(bck.first, bck.second);
-                std::cerr << "    VISIT " << bck.first <<"," << bck.second << std::endl;
+                LOG_DEBUG("    VISIT " << bck.first << "," << bck.second);
             }
 
             backwardPath.push_front(bck);
 
             // If we reached a node, we stop
             if ((grid[bck.second][bck.first] & (NODE|DEND)) != 0) {
-                std::cerr << "    NODE => break" << std::endl;
+                LOG_DEBUG("    NODE => break");
                 break;
             }
 
@@ -973,22 +973,22 @@ Path followPath(int startX, int startY,
 
                 bck = {bx, by};
                 foundNext = true;
-                std::cerr << "    " << bx<<","<<by << " => Found next" << std::endl;
+                LOG_DEBUG("    " << bx << "," << by << " => Found next");
                 break;
             }
             if (!foundNext) {
-                for (const auto p : backwardPath) { std::cerr << p.first <<","<< p.second << "  "; }
-                std::cerr << std::endl;
+                LOG_DEBUG_FOR(const auto p : backwardPath,
+                    p.first << "," << p.second << "  ");
                 // Could not proceed => path fails
                 backwardPath.clear();
-                std::cerr << "    BCK NOT FOUND => clear" << std::endl;
+                LOG_DEBUG("    BCK NOT FOUND => clear");
                 break;
             }
         }
 
         // If backward path is empty => that direction fails, revert & try next
         if (backwardPath.empty()) {
-        	std::cerr << "  BCK EMPTY => CONTINUE" << std::endl;
+            LOG_DEBUG("  BCK EMPTY => CONTINUE");
             continue;
         }
 
@@ -1008,7 +1008,7 @@ Path followPath(int startX, int startY,
         	return result;
         }
 		tempVisited = visited; // Revert changes
-		std::cerr << "  ADD EDGE FAILED => Revert" << std::endl;
+        LOG_DEBUG("  ADD EDGE FAILED => Revert");
         //return emptyPath;
     }
 
@@ -1021,6 +1021,7 @@ std::vector<Edge> findEdges(const std::vector<std::vector<int>>& grid,
                             const std::vector<Point>& nodes,
                             const std::vector<Point>& deadEnds)
 {
+    LOG_INFO("##FINDEDGES nodes:" << nodes.size() << " deadEnds:" << deadEnds.size());
     const int rows = (int)grid.size();
     const int cols = (int)grid[0].size();
     std::vector<std::vector<bool>> visited(rows, std::vector<bool>(cols, false));
@@ -1036,7 +1037,7 @@ std::vector<Edge> findEdges(const std::vector<std::vector<int>>& grid,
             	continue;
             }
 
-            std::cerr <<"#PNT " << x <<","<< y << "   Grid: " << (grid[y][x]) << std::endl;
+            LOG_DEBUG("#PNT " << x << "," << y << "   Grid: " << (grid[y][x]));
 
             Path path = followPath(x,y,edgeAdder,visited);
         }
@@ -1056,7 +1057,7 @@ std::vector<Edge> findNodeEdges(const std::vector<Point>& nodes, const std::vect
 
     EdgeAdder edgeAdder(grid);
 
-    std::cerr << "## FIND NODE EDGES for " << nodes.size() << " unconnected nodes" << std::endl;
+    LOG_INFO("## FIND NODE EDGES for " << nodes.size() << " unconnected nodes");
     for (const auto& n : nodes)
     {
         int x = n.first;
@@ -1070,7 +1071,7 @@ std::vector<Edge> findNodeEdges(const std::vector<Point>& nodes, const std::vect
     std::vector<Edge> result;
     result.reserve(edgeAdder.getEdges().size());
     std::copy(edges.begin(), edges.end(), std::back_inserter(result));
-    std::cerr << "  FOUND " << result.size() << " edges" << std::endl;
+    LOG_INFO("  FOUND " << result.size() << " edges");
     return result;
 }
 
@@ -1127,104 +1128,66 @@ BaseGraph fixBaseEdges(std::vector<Edge>& baseEdges, const Grid& infoGrid, const
 
 /////////////////////////////////////////////////////////////////////////////////////////
 
-#if 0
 void expandPaths(Grid& infoGrid)
 {
-	std::cerr << "#####EXPAND"<< std::endl;
-	int rows = infoGrid.size();
-	int cols = infoGrid[0].size();
-
-	// Queue: (row, col, edge_index)
-	std::queue<std::tuple<int, int, int>> q;
-
-	// Initialize: Mark edge cells and enqueue them
-	for (int r = 0; r < rows; ++r) {
-		for (int c = 0; c < cols; ++c) {
-			if (infoGrid[r][c] & GridType::EDGE) {
-				int edgeIndex = infoGrid[r][c] & GridType::EDGE_MASK;
-				q.emplace(r, c, edgeIndex);
-                std::cerr << "##EDGE:" << c << "," << r << " idx: " << edgeIndex << std::endl;
-			}
-		}
-	}
-
-	// BFS to propagate direction toward the nearest edge
-	while (!q.empty()) {
-		auto [r, c, edgeIndex] = q.front();
-		q.pop();
-
-		for (int dir = 0; dir < 8; ++dir) {
-			int nr = r + GridType::directions8[dir].second;
-			int nc = c + GridType::directions8[dir].first;
-
-			int& cell = infoGrid[nr][nc];
-            if (cell & 0xffff0000) continue;
-
-			// Encode: XPND (direction << 13) | edge_index
-			cell = XPND | (GridType::reverseDirIndex[dir] << XPND_DIR_SHIFT) | edgeIndex;
-            std::cerr << "## " << c << "," << r << " => " << std::hex << cell << std::dec
-			<< " (D:" << get_XPND_DIR(cell) << " E:" << get_XPND_EDGE(cell) << ")" << std::endl;
-			q.emplace(nr, nc, edgeIndex);
-		}
-	}
-}
-#else
-void expandPaths(Grid& infoGrid)
-{
-    std::cerr << "#####EXPAND" << std::endl;
+    LOG_INFO("## EXPAND PATHS");
     int rows = infoGrid.size();
     int cols = infoGrid[0].size();
 
-    // Queue: (row, col, distance, dir_to_parent)
-    std::queue<std::tuple<int, int, int, int>> q;
+    // Queue: (row, col, distance, dir, srcX, srcY)
+    std::queue<std::tuple<int, int, int, int, int, int>> q;
 
-    // Initialize: Mark edge cells and enqueue their neighbors
+    // Initialize from ALL source types
+    LOG_DEBUG("Generate expansion queue");
     for (int r = 0; r < rows; ++r) {
         for (int c = 0; c < cols; ++c) {
-            if (infoGrid[r][c] & GridType::EDGE) {
-                for (int dir = 0; dir < 8; ++dir) {
-                    int nr = r + GridType::directions8[dir].second;
-                    int nc = c + GridType::directions8[dir].first;
-                    int& neighbor = infoGrid[nr][nc];
+            int cell = infoGrid[r][c];
 
-                    if (neighbor & 0xffff0000) continue;
-
-                    // Encode reverse direction to reach this edge
-                    neighbor = XPND | (GridType::reverseDirIndex[dir] << XPND_DIR_SHIFT) | 1;
-                    q.emplace(nr, nc, 1, GridType::reverseDirIndex[dir]);
-
-                    std::cerr << "##EDGE:" << c << "," << r << " -> " << nc << "," << nr
-                        << " dist:1 dir:" << GridType::reverseDirIndex[dir] << std::endl;
-                }
-            }
+            LOG_DEBUG(" " << c << "," << r << " = " << std::hex << cell << std::dec);
+            // Check if this is any type of source cell
+			if ((cell & GridType::NODE) || (cell & GridType::DEND) || (cell & GridType::EDGE)) {
+				q.emplace(c, r, 0, -1, c, r);
+                LOG_DEBUG("  PUSH " << c << "," << r << " " << std::hex << cell << std::dec);
+			}
         }
     }
 
-    // BFS expand
+    // BFS expansion with distance checking
+    LOG_DEBUG("BFS Expansion of queue");
     while (!q.empty()) {
-        auto [r, c, dist, dirToEdge] = q.front();
+        auto [x, y, dist, dir, srcX, srcY] = q.front();
         q.pop();
 
-        for (int dir = 0; dir < 8; ++dir) {
-            int nr = r + GridType::directions8[dir].second;
-            int nc = c + GridType::directions8[dir].first;
-            int& cell = infoGrid[nr][nc];
+        LOG_DEBUG("  Check: " << x << ", " << y << " dir:" << dir << " dst:" << dist
+            << " from srcxy: " << srcX << "," << srcY);
+		for (int d = 0; d < 8; ++d) {
+            int nx = x + directions8[d].first;
+            int ny = y + directions8[d].second;
+			int& cell = infoGrid[ny][nx];
 
+            // Must be empty
             if (cell & 0xffff0000) continue;
+            LOG_DEBUG("    checkDir: " << d << " xy: " << nx << "," << ny << " = "
+                << std::hex << cell << std::dec);
 
-            // Encode reverse direction to reach the edge, distance = dist + 1
-            cell = XPND | (GridType::reverseDirIndex[dir] << XPND_DIR_SHIFT) | (dist + 1);
-            q.emplace(nr, nc, dist + 1, GridType::reverseDirIndex[dir]);
-
-            std::cerr << "## " << c << "," << r << " => " << nc << "," << nr
-                << " val: " << std::hex << cell << std::dec
-                << " (D:" << get_XPND_DIR(cell)
-                << " Dist:" << get_XPND_DIST(cell) << ")" << std::endl;
-        }
+            int revDir = (d + 4) & 7;
+            if (revDir == dir) {
+                // Store XPND
+                int newDist = dist + 1;
+                cell = GridType::XPND | (dir << GridType::XPND_DIR_SHIFT) | (dist+1);
+                LOG_DEBUG("    CNTU: " << nx << "," << ny << " dir:" << dir << " dist:" << (dist + 1)
+                    << " (" << std::hex << cell << std::dec << ")");
+                q.emplace(nx, ny, (dist+1), dir, srcX, srcY);
+            }
+            else {
+                LOG_DEBUG("    TURN: " << nx << "," << ny << " dir:" << revDir << " dist:1"
+                    << " (" << std::hex << cell << std::dec << ")");
+                cell = GridType::XPND | (revDir << GridType::XPND_DIR_SHIFT) | 1;
+                q.emplace(nx, ny, 1, revDir, x, y);
+            }
+		}
     }
 }
-
-#endif
 
 //////////////////////////////////////////////////////////////
 
@@ -1258,7 +1221,7 @@ Path findPathBetweenNodes(int startNode, int endNode, const std::vector<Edge>& e
     std::vector<int> edgeUsed(nodes.size(), -1);
     std::vector<bool> visited(nodes.size(), false);
 
-    std::cerr << "PATH BETWEEN: " << startNode << " -> " << endNode << std::endl;
+    LOG_INFO("PATH BETWEEN: " << startNode << " -> " << endNode);
     q.push(startNode);
     visited[startNode] = true;
 
@@ -1277,13 +1240,13 @@ Path findPathBetweenNodes(int startNode, int endNode, const std::vector<Edge>& e
             else if (edge.to == current) neighbor = edge.from;
 
             if (neighbor != -1 && !visited[neighbor]) {
-            	std::cerr << "  Checked edge: " << edgeIdx << " " << edge.from << " -> " << edge.to
-            			<< " cur: " << current << " neigh: " << neighbor << std::endl;
+                LOG_DEBUG("  Checked edge: " << edgeIdx << " " << edge.from << " -> " << edge.to
+                    << " cur: " << current << " neigh: " << neighbor);
                 visited[neighbor] = true;
                 prev[neighbor] = current;
                 edgeUsed[neighbor] = edgeIdx;
                 q.push(neighbor);
-                std::cerr << "  store: " << neighbor << " = " << current << std::endl;
+                LOG_DEBUG("  store: " << neighbor << " = " << current);
             }
         }
     }
@@ -1308,15 +1271,10 @@ Path findPathBetweenNodes(int startNode, int endNode, const std::vector<Edge>& e
 
         at = prev[at];
     }
-    std::cerr << "  NODES: ";
-    for (int n : prev) {
-    	std::cerr << n << " ";
-    }
-    std::cerr << std::endl;
-    std::cerr << "FINAL PATH BETWEEN: " << startNode << " -> " << endNode << std::endl;
-    for (const auto& pnt : fullPath) {
-    	std::cerr << "  " << pnt.first << "," << pnt.second << std::endl;
-    }
+    LOG_DEBUG_CONT("  NODES: ");
+    LOG_DEBUG_FOR(int n : prev, n << " ");
+    LOG_DEBUG_CONT("FINAL PATH BETWEEN: " << startNode << " -> " << endNode);
+    LOG_DEBUG_FOR(const auto& pnt : fullPath, "  " << pnt.first << "," << pnt.second);
 
     return fullPath;
 }
@@ -1408,7 +1366,7 @@ std::vector<AbstractNode> createAbstractNodes(
     }
 
 	// Calculate the center of each cluster
-	std::cerr << "##CREATE ANODEs. clusters: " << clusters.size() << std::endl;
+    LOG_DEBUG("##CREATE ANODEs. clusters: " << clusters.size());
     for (auto& [i, cluster] : clusters) {
         int totalPoints = cluster.baseNodes.size();
         cluster.center.first /= totalPoints;
@@ -1426,7 +1384,7 @@ std::vector<AbstractNode> createAbstractNodes(
     for (auto& abNode : abstractNodes) {
         int baseIdx = findCentralNode(abNode, nodes);
 		if (baseIdx == -1) {
-			std::cerr << "ERROR: Could not find central node for idx: " << idx << std::endl;
+            LOG_ERROR("Could not find central node for idx: " << idx);
 		}
         abNode.baseCenterNode = baseIdx;
         closestMap[idx] = baseIdx;
@@ -1434,7 +1392,7 @@ std::vector<AbstractNode> createAbstractNodes(
         ++idx;
     }
 
-	std::cerr << "   => MADE ABNODEs: " << abstractNodes.size() << std::endl; 
+    LOG_DEBUG("   => MADE ABNODEs: " << abstractNodes.size());
     return abstractNodes;
 }
 
@@ -1457,134 +1415,6 @@ int computeDirection(const Point& from, const Point& to) {
     }
     return -1; // This should never happen
 }
-
-//
-// Function to generate the navigation map
-//
-
-#if 0
-ZoneGrid generateNavigationGrid(const Graph& graph) {
-	return generateNavigationGrid(graph.infoGrid, graph.baseEdges, graph.abstractEdges,
-			graph.baseNodeIdxs, graph.abstractNodes);
-}
-
-// Compute the granular angle between two points
-double computeAngle(const Point& from, const Point& to) {
-    int dx = to.first - from.first;
-    int dy = to.second - from.second;
-    double angle = std::atan2(dy, dx) * 180.0 / MY_PI;
-    if (angle < 0) angle += 360; // Normalize angle to [0, 360)
-    return angle;
-}
-
-ZoneGrid generateNavigationGrid(
-    const Grid& grid,
-    const std::vector<Edge>& baseEdges,
-    const std::vector<AbstractEdge>& abstractEdges,
-    const std::vector<Point>& baseNodes,
-    const std::vector<AbstractNode>& abstractNodes)
-{
-    // Dimensions of the grid
-    int rows = grid.size();
-    int cols = grid[0].size();
-
-    std::cerr << "============ NAV GRID"  << std::endl;
-    // Initialize the navigation map
-    ZoneGrid navMap(rows, std::vector<GridPointInfo>(cols));
-
-    // For every empty grid cell calculate navigation info
-    for (int r = 0; r < rows; ++r) {
-        for (int c = 0; c < cols; ++c) {
-            int t = grid[r][c];
-            if (t&WALL) {
-            	continue; // Skip walls
-            }
-
-            Point current = {c, r};
-
-            // Find the closest base edge using its path field
-            int closestBaseEdgeIdx = -1;
-            double minDistanceBase = std::numeric_limits<double>::max();
-            for (size_t i = 0; i < baseEdges.size(); ++i) {
-                if (baseEdges[i].toDeadEnd) continue;
-                for (const auto& point : baseEdges[i].path) {
-                    double distance = std::hypot(current.first - point.first, current.second - point.second);
-                    if (distance < minDistanceBase) {
-                        minDistanceBase = distance;
-                        closestBaseEdgeIdx = i;
-                    }
-                }
-            }
-            if (closestBaseEdgeIdx == -1) {
-            	std::cerr << "ERROR: no edge found" << std::endl;
-            }
-
-            // Find which baseNode of edgeis closer
-            const auto& closeEdge = baseEdges[closestBaseEdgeIdx];
-            const auto& closePath = closeEdge.path;
-            Point fromPnt = closePath[0];
-            Point toPnt = closePath[closePath.size()-1];
-            double fromDist = std::hypot(current.first - fromPnt.first, current.second - fromPnt.second);
-            double toDist = std::hypot(current.first - toPnt.first, current.second - toPnt.second);
-            std::cerr << " " << c << "," << r << " bEdge:" << closestBaseEdgeIdx << std::endl;
-            std::cerr << "   " << " fidx:" << closeEdge.from << " tidx:" << closeEdge.to << std::endl;
-            std::cerr << "   " << " f:" << fromPnt.first << "," << fromPnt.second << " d:" << fromDist << std::endl;
-            std::cerr << "   " << " t:" << toPnt.first << "," << toPnt.second << " d:" << toDist << std::endl;
-            int closestBaseNodeIdx = fromDist < toDist
-            		? closeEdge.from
-            		: closeEdge.to;
-            std::cerr << "   " << c << "," << r << " close base: " << closestBaseNodeIdx << " t:" << toPnt.first << "," << toPnt.second << " d:" << toDist << std::endl;
-
-            // Find the closest abstract edge using its path field
-            int closestAbstractEdgeIdx = -1;
-            double minDistanceAbstract = std::numeric_limits<double>::max();
-            for (size_t i = 0; i < abstractEdges.size(); ++i) {
-                for (const auto& point : abstractEdges[i].path) {
-                    double distance = std::hypot(current.first - point.first, current.second - point.second);
-                    if (distance < minDistanceAbstract) {
-                        minDistanceAbstract = distance;
-                        closestAbstractEdgeIdx = i;
-                        std::cerr << "   p:" << point.first << "," << point.second << " dist:" << distance
-                        		<< " => closest:" << closestAbstractEdgeIdx << std::endl;
-                    }
-                }
-            }
-            if (closestAbstractEdgeIdx == -1) {
-            	std::cerr << "ERROR: no ABedge found" << std::endl;
-            }
-
-            navMap[r][c].closestBaseNodeIdx = closestBaseNodeIdx;
-            navMap[r][c].closestBaseEdgeIdx = closestBaseEdgeIdx;
-            navMap[r][c].closestAbstractEdgeIdx = closestAbstractEdgeIdx;
-
-            // Find which of the 2 abstract nodes is closest
-            const auto& abNodeFromIdx = abstractEdges[closestAbstractEdgeIdx].from;
-            const auto& abNodeToIdx = abstractEdges[closestAbstractEdgeIdx].to;
-            const auto& baseFrom = baseNodes[ abstractNodes[ abNodeFromIdx ].baseCenterNode ];
-            const auto& baseTo = baseNodes[ abstractNodes[ abNodeToIdx ].baseCenterNode ];
-            double distFrom = std::hypot(current.first - baseFrom.first, current.second - baseFrom.second);
-            double distTo = std::hypot(current.first - baseTo.first, current.second - baseTo.second);
-            navMap[r][c].closestAbstractNodeIdx = distFrom < distTo ? abNodeFromIdx : abNodeToIdx;
-
-            // Compute next step directions8 using abstract edge paths
-            const auto& abstractEdge = abstractEdges[closestAbstractEdgeIdx];
-
-            // Calculate directions8 and angles towards the "from" and "to" nodes of the abstract edge
-            Point fromNode = baseNodes[abstractNodes[abstractEdge.from].baseCenterNode];
-            Point toNode = baseNodes[abstractNodes[abstractEdge.to].baseCenterNode];
-
-            navMap[r][c].directionToFromNode = computeDirection(current, fromNode);
-            navMap[r][c].directionToToNode = computeDirection(current, toNode);
-
-            navMap[r][c].angleToFromNode = computeAngle(current, fromNode);
-            navMap[r][c].angleToToNode = computeAngle(current, toNode);
-            std::cerr << "  AT] " << c << "," << r << " f:" << fromNode.first << "," << fromNode.second << " t:" << toNode.first << "," << toNode.second << std::endl;
-        }
-    }
-
-    return navMap;
-}
-#endif
 
 //////////////////////////////////////////////////////////////////////
 
@@ -1646,7 +1476,7 @@ std::vector<ZoneInfo> generateAbstractZones(ZoneGrid& zoneGrid,
 	const std::vector<Edge>& baseEdges,
     const std::vector<AbstractNode>& abstractNodes)
 {
-    std::cerr << "## generateAbstractZones" << std::endl;
+    LOG_INFO("## generateAbstractZones");
     int rows = grid.size();
     int cols = grid[0].size();
 
@@ -1667,20 +1497,17 @@ std::vector<ZoneInfo> generateAbstractZones(ZoneGrid& zoneGrid,
     }
 
     // Multi-source path-based BFS
-    std::cerr << "## QSIZE: " << q.size() << std::endl;
+    LOG_DEBUG("  QSIZE: " << q.size());
     while (!q.empty()) {
         auto [c, r, abstractIdx, cost] = q.front();
         q.pop();
 
-        std::cerr << "ZG: POP " << c << "," << r << " abIdx:" << abstractIdx << " cost:" << cost << std::endl;
 		// Check the neighbors of the cur zone cell
         for (const auto& [dc, dr] : directions8) {
             int nc = c + dc;
             int nr = r + dr;
-			std::cerr << "ZG: TRY " << nc << "," << nr << std::endl;
 
             if (grid[nr][nc] & WALL) {
-				std::cerr << "   => WALL" << std::endl;
                 continue;
             }
 
@@ -1691,7 +1518,6 @@ std::vector<ZoneInfo> generateAbstractZones(ZoneGrid& zoneGrid,
             if (newCost < zoneGrid[nr][nc].distanceToAbstractNode) {
                 zoneGrid[nr][nc].closestAbstractNodeIdx = abstractIdx;
                 zoneGrid[nr][nc].distanceToAbstractNode = newCost;
-                std::cerr << "  => " << nc << "," << nr << " => abNode: " << abstractIdx << " dist:" << newCost << std::endl;
 				// Add this cell to the queue for further expansion
                 q.emplace(nc, nr, abstractIdx, newCost);
             }
@@ -1707,8 +1533,9 @@ std::vector<ZoneInfo> generateAbstractZones(ZoneGrid& zoneGrid,
 		int fromZone = zoneGrid[from.second][from.first].closestAbstractNodeIdx;
 		int toZone = zoneGrid[to.second][to.first].closestAbstractNodeIdx;
         
-        std::cerr << "DEBUG: Processing edge " << edgeIdx << " from (" << from.first << "," << from.second << ") to (" << to.first << "," << to.second << ")";
-        std::cerr << " fromZone=" << fromZone << " toZone=" << toZone << std::endl;
+        LOG_DEBUG("  Processing edge " << edgeIdx << " from (" << from.first << "," << from.second
+            << ") to (" << to.first << "," << to.second << ")"
+            << " fromZone=" << fromZone << " toZone=");
         
         // Add the edge to ALL zones it passes through (fromZone and toZone)
         std::vector<int> zonesToAdd = {fromZone, toZone};
@@ -1726,22 +1553,21 @@ std::vector<ZoneInfo> generateAbstractZones(ZoneGrid& zoneGrid,
 		for (int zoneIdx : zonesToAdd) {
 			if (std::find(zones[zoneIdx].baseEdgeIdxs.begin(), zones[zoneIdx].baseEdgeIdxs.end(), edgeIdx) == zones[zoneIdx].baseEdgeIdxs.end()) {
 				zones[zoneIdx].baseEdgeIdxs.push_back(edgeIdx);
-				std::cerr << "DEBUG: Added edge " << edgeIdx << " to zone " << zoneIdx << std::endl;
+                LOG_DEBUG("    Added edge " << edgeIdx << " to zone " << zoneIdx);
 			} else {
-				std::cerr << "DEBUG: Edge " << edgeIdx << " already in zone " << zoneIdx << std::endl;
+                LOG_DEBUG("    Edge " << edgeIdx << " already in zone " << zoneIdx);
 			}
 		}
 	};
 
     // First, add all edges from the graph to their appropriate zones
-    std::cerr << "DEBUG: Processing " << baseEdges.size() << " total edges" << std::endl;
+    LOG_DEBUG("Processing " << baseEdges.size() << " total edges");
     for (int edgeIdx = 0; edgeIdx < baseEdges.size(); ++edgeIdx) {
         const Edge& edge = baseEdges[edgeIdx];
         if (edge.toDeadEnd) {
-            std::cerr << "DEBUG: Skipping edge " << edgeIdx << " (dead end)" << std::endl;
+            LOG_DEBUG("  Skipping edge " << edgeIdx << " (dead end)");
             continue; // Skip dead end edges
         }
-        std::cerr << "DEBUG: Calling addEdge for edge " << edgeIdx << std::endl;
         addEdge(edgeIdx, zones);
     }
 
@@ -1771,7 +1597,7 @@ std::vector<ZoneInfo> generateAbstractZones(ZoneGrid& zoneGrid,
 
 void generateZoneBoundaries(AbstractLevel& abstractLevel)
 {
-    std::cerr << "## generateZoneBoundaries" << std::endl;
+    LOG_INFO("## generateZoneBoundaries");
 	const ZoneGrid& zoneGrid = abstractLevel.zoneGrid;
 	std::vector<ZoneInfo>& zones = abstractLevel.zones;
     int rows = zoneGrid.size();
@@ -1796,9 +1622,9 @@ void generateZoneBoundaries(AbstractLevel& abstractLevel)
                     // Also add neighbor cell to neighbor zone's boundary map for currentZone
                     zones[neighborZone].zoneBoundaryCellMap[curZone].insert({ { nx, ny }, reverseDirIndex[dir8]});
 
-					std::cerr << "  ZONE: " << curZone << " BOUNDARY: " << neighborZone
-						<< " dir4: " << dir4 << " dir8: " << dir8 << " rev8: " << reverseDirIndex[dir8]
-						<< " cell: " << x << "," << y << " neighbor: " << nx << "," << ny << std::endl;
+                    LOG_DEBUG("  ZONE: " << curZone << " BOUNDARY: " << neighborZone
+                        << " dir4: " << dir4 << " dir8: " << dir8 << " rev8: " << reverseDirIndex[dir8]
+                        << " cell: " << x << "," << y << " neighbor: " << nx << "," << ny);
                 }
             }
         }
@@ -1859,7 +1685,7 @@ std::vector<AbstractEdge> makeExtraAbstractEdges(
 	const ZoneGrid& zoneGrid,
     const BaseGraph& baseGraph)
 {
-	std::cerr << "## MAKE EXTRA ABSTRACT EDGES" << std::endl;
+    LOG_INFO("## MAKE EXTRA ABSTRACT EDGES");
     // make current connections
 	std::unordered_map<std::pair<int, int>, bool, PairHash> connectedZones;
 	for (const auto& edge : abstractEdges) {
@@ -1917,27 +1743,25 @@ std::vector<AbstractEdge> makeExtraAbstractEdges(
                 }
             }
 
-			std::cerr << "###### ZONE: a:" << zoneA << " b: " << zoneB << " try find route: edges: " << adjacentBaseEdges.size() << std::endl;
+            LOG_INFO("###### ZONE: a:" << zoneA << " b: " << zoneB << " try find route: edges: " << adjacentBaseEdges.size());
 			std::vector<AbstractEdge> newEdges = AbstractMST::generateMSTAbstractEdges(baseGraph, baseEdges, baseNodes, adjacentNodes);
             if (newEdges.size() > 1)
             {
-				std::cerr << "************** EEEEK ********** " << std::endl;
+                LOG_ERROR("*********** EEEEK. No new edges ********** ");
             }
-            std::cerr << "###### => GOT " << newEdges.size() << " extra edges" << std::endl;
+            LOG_INFO("###### => GOT " << newEdges.size() << " extra edges");
 			for (const auto& newEdge : newEdges) {
                 const Edge& fromBase = adjacentBaseEdges[newEdge.from];
                 const Edge& toBase = adjacentBaseEdges[newEdge.to];
-				std::cerr << " ***** ADDed zone connect: " << zoneA<<"->"<<zoneB << "  EDGE:   frombase: " << fromBase.from << "->" << fromBase.to << "  toBase: " << toBase.from<<"->" << toBase.to << std::endl;
-				std::cerr << "       Path: " << newEdge.path.size() << std::endl;
-                for (const auto& p : newEdge.path) {
-                    std::cerr << p.first << "," << p.second << "  ";
-                }
-				std::cerr << std::endl;
+                LOG_DEBUG(" ***** ADDed zone connect: " << zoneA << "->" << zoneB << "  EDGE:   frombase: " << fromBase.from << "->" << fromBase.to << "  toBase: " << toBase.from << "->" << toBase.to);
+                LOG_DEBUG_CONT("       Path sz:" << newEdge.path.size() << "  ");
+                LOG_DEBUG_FOR(const auto& p : newEdge.path,
+                    p.first << "," << p.second << "  ");
 				extraEdges.push_back({ zoneA, zoneB, newEdge.path });
 			}
         }
 	}
-	std::cerr << "EXTRA EDGES: " << extraEdges.size() << std::endl;
+    LOG_INFO("##=> EXTRA EDGES: " << extraEdges.size());
     return extraEdges;
 }
 
@@ -1946,18 +1770,19 @@ std::vector<AbstractEdge> makeExtraAbstractEdges(
 std::vector<AbstractLevel> makeAbstractLevels(const Graph& graph)
 {
     std::vector<AbstractLevel> abstractLevels;
+    LOG_INFO("## MAKE ABSTRACT LEVELS");
 	do {
 		int pass = abstractLevels.size();
 
-		std::cerr << "## MAKE LEVEL: " << pass<< std::endl;
+        LOG_INFO("== MAKE LEVEL: " << pass);
 		abstractLevels.push_back({});
 		AbstractLevel& ablv = abstractLevels.back();
 
 		// Find the abstract Nodes
 		//
-		std::cerr << "## MAKE ABNODEs: " << pass << std::endl;
+        LOG_INFO("   MAKE ABNODEs: " << pass);
 		ablv.abstractNodes = createAbstractNodes(graph.baseNodes, 5.0, 2*pass+2);
-		std::cerr << "   ABNODEs: " << ablv.abstractNodes.size() << std::endl;
+        LOG_INFO("   => ABNODEs: " << ablv.abstractNodes.size());
 		// Check we actually got some nodes
 		if (ablv.abstractNodes.size() < 2) {
 			if (!ablv.abstractNodes.empty()) {
@@ -1969,9 +1794,9 @@ std::vector<AbstractLevel> makeAbstractLevels(const Graph& graph)
 
 		// Make Min Span Tree of abstract nodes to get abstract edges
 		//
-		std::cerr << "## MAKE ABEDGEs: " << pass << std::endl;
+        LOG_INFO("## MAKE ABEDGEs: " << pass);
 		ablv.abstractEdges = AbstractMST::generateMSTAbstractEdges(graph.baseGraph, graph.baseEdges, graph.baseNodes, ablv.abstractNodes);
-		std::cerr << "   ABEDGEs: " << ablv.abstractEdges.size() << std::endl;
+        LOG_INFO("   => ABEDGEs: " << ablv.abstractEdges.size());
 		debugAbstractEdges(pass, ablv, graph, "ABSTRACT");
 
 		// Generate a zone for each abstract node
@@ -1985,26 +1810,26 @@ std::vector<AbstractLevel> makeAbstractLevels(const Graph& graph)
 
 		// Fix connections to AbstractNodes
 		//
-		std::cerr << "## MAKE EXTRA: " << pass << std::endl;
+        LOG_INFO("   MAKE EXTRA: " << pass);
 		std::vector<AbstractEdge> extraEdges = makeExtraAbstractEdges(
 			graph.baseNodes, graph.baseEdges,
 			ablv.abstractNodes, ablv.abstractEdges,
 			ablv.zones, ablv.zoneGrid,
 			graph.baseGraph);
-		std::cerr << "   EXTRA: " << extraEdges.size() << std::endl;
+        LOG_INFO("   => EXTRA: " << extraEdges.size());
 		// Add the extra edges to the abstract edges    
 		ablv.abstractEdges.insert(ablv.abstractEdges.end(), extraEdges.begin(), extraEdges.end());
 		debugAbstractEdges(pass, ablv, graph, "ABEXTRA");
 
 	} while (abstractLevels.back().zones.size() > 16);
 
-	std::cerr << "## MAKE LEVEL: " << abstractLevels.size() << " zones:" << abstractLevels.back().zones.size() << std::endl;
+    LOG_INFO("#=> MAKE LEVEL: " << abstractLevels.size() << " zones:" << abstractLevels.back().zones.size());
 	return abstractLevels;
 }
 
 Graph makeGraph(const Grid& floorGrid)
 {
-	std::cout << "## MAKE GRAPH" << std::endl;
+    LOG_INFO("## MAKE GRAPH");
 	{
         writeGridToFile(floorGrid, "GRID.txt");
 	}
@@ -2086,55 +1911,70 @@ Graph makeGraph(const Grid& floorGrid)
 	markGridBoundaries(graph.infoGrid);
 	expandPaths(graph.infoGrid);
 	{
-        std::cerr << "####INFO GRID" << std::endl;
+        LOG_INFO("============== INFO GRID ==============");
+        LOG_DEBUG_FOR(int i = 0; i < graph.infoGrid[0].size(); ++i,
+            "   " << (i % 10));
+        int r = 0;
 		for (const auto& row : graph.infoGrid)
 		{
-			for (const auto& cell : row)
-			{
-                char c = 'X';
-                if (cell & NODE) c = 'N';
-                else if (cell & DEND) c = 'd';
-                else if (cell & EDGE) c = '-';
-                else if (cell & WALL) c = '#';
-                else if (cell & XPND) c = 'x';
-                if (c != 'x') {
-                    std::cerr << std::hex << c << std::dec;
-                }
-                else
+            for (int lp = 0; lp < 3; ++lp) {
+                LOG_DEBUG_CONT((r % 10) << " ");
+                for (const auto& cell : row)
                 {
-                    std::cerr << get_XPND_DIR(cell);
+                    std::string c = " 0 ";
+                    if (cell & NODE) c = "NNN";
+                    else if (cell & DEND) c = "ddd";
+                    else if (cell & EDGE) c = "---";
+                    else if (cell & WALL) c = "###";
+                    else if (cell & XPND) c = "xxx";
+                    if (c != "xxx") {
+                        LOG_DEBUG_CONT(std::hex << c << std::dec);
+                    }
+                    else
+                    if (lp == 1)
+                    {
+                        LOG_DEBUG_CONT(get_XPND_DIR(cell) << ":" << get_XPND_DIST(cell));
+                    }
+                    else
+                    {
+                        LOG_DEBUG_CONT("   ");
+                    }
+                    LOG_DEBUG_CONT(" ");
                 }
-			}
-            std::cerr << std::endl;
+                LOG_DEBUG("");
+            }
+            LOG_DEBUG("");
+            ++r;
 		}
-    std::cerr << "#############" << std::endl;
+        LOG_DEBUG("#############");
 	}
+    debugExpandedPaths(graph.infoGrid);
 
     //
 	// Generate the abstract levels with abstract nodes and edges, zones
     //
-	std::cout << "===MAKE ABSTRACT" << std::endl;
+    LOG_INFO("===MAKE ABSTRACT");
     graph.abstractLevels = makeAbstractLevels(graph);
 
     //
     // Make the subgrid flow fields
     //
-	std::cout << "===MAKE FLOW" << std::endl;
+    LOG_INFO("===MAKE FLOW");
     FlowField::generateFlowGrids(graph);
 
     //
     //
     //
-	std::cout << "==MAKE PATHS" << std::endl;
+    LOG_INFO("==MAKE PATHS");
 	computeAllPathDists(graph.baseEdges, graph.baseNodes.size());
 
     //
     // Pre-compute routing graph info
     //
-	std::cout << "==ROUTING GRAPH" << std::endl;
-    graph.routingGraph = Routing::buildSparseGraph(graph.baseNodes, graph.baseEdges, graph.infoGrid);
+    LOG_INFO("==ROUTING GRAPH");
+    graph.routingGraph = Routing::buildSparseGraph(graph.baseNodes, graph.deadEnds, graph.baseEdges, graph.infoGrid);
 
-	std::cout << "==========GRAPH DONE" << std::endl;
+    LOG_INFO("## ======= GRAPH MADE =====");
 	debugDump(graph);
 	return graph;
 }
@@ -2195,7 +2035,7 @@ void debugAbstractNodes(int pass, const AbstractLevel& ablv, const Graph& graph)
 	for (const auto& n : ablv.abstractNodes) {
 		int c = graph.baseNodes[n.baseCenterNode].first;
 		int r = graph.baseNodes[n.baseCenterNode].second;
-		std::cerr << c << "," << r << ")" << std::endl;
+        LOG_DEBUG(c << "," << r << ")");
 		tempGrid[r][c] = XPND << 2;
 	}
 	makeTGA(makeDebugName(pass, "ALL_NODES"), tempGrid);
@@ -2218,34 +2058,29 @@ void debugAbstractEdges(int pass, const AbstractLevel& ablv, const Graph& graph,
 		c = e.path[0].first;
 		r = e.path[0].second;
 		tempGrid[r][c] = XPND << 2;
-		std::cerr << "## ABEDGE " << idx << "   ab:" << e.from << " -> " << e.to << " (base: "
-			<< ablv.abstractNodes[e.from].baseCenterNode << " -> " << ablv.abstractNodes[e.to].baseCenterNode << ")" << std::endl;
+        LOG_DEBUG("## ABEDGE " << idx << "   ab:" << e.from << " -> " << e.to << " (base: "
+            << ablv.abstractNodes[e.from].baseCenterNode << " -> " << ablv.abstractNodes[e.to].baseCenterNode << ")");
 	}
-	std::cerr << "BASENODE: " << graph.baseNodes.size() << std::endl;
-	std::cerr << "BASEEDGE: " << graph.baseEdges.size() << std::endl;
-	std::cerr << "ABNODE: " << ablv.abstractNodes.size() << std::endl;
-	std::cerr << "ABEDGE: " << ablv.abstractEdges.size() << std::endl;
+    LOG_INFO("BASENODE: " << graph.baseNodes.size());
+    LOG_INFO("BASEEDGE: " << graph.baseEdges.size());
+    LOG_INFO("ABNODE: " << ablv.abstractNodes.size());
+    LOG_INFO("ABEDGE: " << ablv.abstractEdges.size());
 	makeTGA(makeDebugName(pass, fname), tempGrid);
 }
 
 void debugZones(int pass, const AbstractLevel& ablv, const Graph& graph)
 {
+    LOG_INFO("DEBUG ZONES");
 	int i = 0;
 	for (const auto& zi : ablv.zones) {
-		std::cerr << "INFO " << i << " => ";
-		for (const auto& n : zi.adjacentZones) {
-			std::cerr << n << " ";
-		}
-		std::cerr << "         Nodes: ";
-		for (const auto& n : zi.baseNodeIdxs) {
-			std::cerr << n << " ";
-		}
-		std::cerr << "         Edges: ";
-		for (const auto& n : zi.baseEdgeIdxs) {
-			std::cerr << n << " ";
-		}
+        LOG_DEBUG_CONT("Level: " << i << " => zones: ");
+        LOG_DEBUG_FOR(const auto& n : zi.adjacentZones, n << " ");
+        LOG_DEBUG_CONT("         Nodes: ");
+        LOG_DEBUG_FOR(const auto& n : zi.baseNodeIdxs, n << " ");
+        LOG_DEBUG_CONT("         Edges: ");
+        LOG_DEBUG_FOR(const auto& n : zi.baseEdgeIdxs, n << " ");
+        LOG_DEBUG("");
 		++i;
-		std::cerr << std::endl;
 	}
 	std::vector<int> vals = {
 			GridToGraph::NODE,
@@ -2301,210 +2136,200 @@ void debugDump(const Graph& graph)
 	Grid tempGrid(graph.infoGrid);
 
     int l=0;
-    std::cerr << "############ LEVELS " << std::endl;
-    for (const auto& ablv : graph.abstractLevels) {
-            int z=0;
-            for (const auto& srcZoneInfo : ablv.zones) {
-                std::cerr << "ablv: " << l << " z: " << z << " b: ";
-                for (int b : srcZoneInfo.baseNodeIdxs) {
-                    std::cerr << " " << b;
-                }
-                std::cerr << std::endl;
-                std::cerr << "ablv: " << l << " z: " << z << " e: ";
-                for (int e : srcZoneInfo.baseEdgeIdxs) {
-                    std::cerr << " " << e;
-                }
-                std::cerr << std::endl;
-                ++z;
-            }
-            ++l;
-    }
+    LOG_INFO("DEBUG DUMP");
+    LOG_DEBUG("############ LEVELS ");
+	for (const auto& ablv : graph.abstractLevels) {
+		int z = 0;
+		for (const auto& srcZoneInfo : ablv.zones) {
+			LOG_DEBUG_CONT("ablv: " << l << " z: " << z << " b: ");
+			LOG_DEBUG_FOR(int b : srcZoneInfo.baseNodeIdxs, " " << b);
+			LOG_DEBUG_CONT("ablv: " << l << " z: " << z << " e: ");
+			LOG_DEBUG_FOR(int e : srcZoneInfo.baseEdgeIdxs, " " << e);
+			++z;
+		}
+		++l;
+	}
 
-
-
-
-    std::cerr << "############ NODES" << std::endl;
+    LOG_DEBUG("############ NODES");
     for (int i=0; i < graph.baseNodes.size(); ++i) {
         const auto& n = graph.baseNodes[i];
-        std::cerr << i << "  " << n.first <<"," << n.second << std::endl;
+        LOG_DEBUG(i << "  " << n.first << "," << n.second);
     }
-    std::cerr << "############ EDGES" << std::endl;
+    LOG_DEBUG("############ EDGES");
     for (int i=0; i < graph.baseEdges.size(); ++i) {
         const auto& e = graph.baseEdges[i];
-        std::cerr << i << "  " << e.from <<"->" << e.to << (e.toDeadEnd ? " DE" : " ");
-        for (const auto p: e.path) {
-            std::cerr << "  " << p.first <<","<< p.second << " ";
-        }
-        std::cerr << std::endl;
+        LOG_DEBUG_CONT(i << "  " << e.from << "->" << e.to << (e.toDeadEnd ? " DE" : " "));
+        LOG_DEBUG_FOR(const auto p: e.path,
+            "  " << p.first << "," << p.second << " ");
     }
     int lv = 0;
     for (const auto& ablv : graph.abstractLevels)
 	{
-		std::cerr << "########################################################" << std::endl;
-		std::cerr << "## ABSTRACT LEVEL " << lv << std::endl;
-		std::cerr << "Abstract Nodes:  " << ablv.abstractNodes.size() << std::endl;
+        LOG_DEBUG("########################################################");
+        LOG_DEBUG("## ABSTRACT LEVEL " << lv);
+        LOG_DEBUG("Abstract Nodes:  " << ablv.abstractNodes.size());
 		int idx = 0;
 		for (const auto& node : ablv.abstractNodes) {
-			std::cerr << " " << idx << " Center: (" << node.center.first << ", " << node.center.second << ")"
-				<< " nodesSz: " << node.baseNodes.size()
-				<< " baseIdx:" << node.baseCenterNode << " ("
-				<< graph.baseNodes[node.baseCenterNode].first << "," << graph.baseNodes[node.baseCenterNode].second << ")"
-				<< std::endl;
+            LOG_DEBUG(" " << idx << " Center: (" << node.center.first << ", " << node.center.second << ")"
+                << " nodesSz: " << node.baseNodes.size()
+                << " baseIdx:" << node.baseCenterNode << " ("
+                << graph.baseNodes[node.baseCenterNode].first << "," << graph.baseNodes[node.baseCenterNode].second << ")");
 			++idx;
 		}
 
-		std::cerr << "\nAbstract Edges: " << ablv.abstractEdges.size() << std::endl;
+        LOG_DEBUG("");
+        LOG_DEBUG("Abstract Edges: " << ablv.abstractEdges.size());
 		for (const auto& edge : ablv.abstractEdges) {
-			std::cerr << "Edge from Cluster " << edge.from << " to Cluster " << edge.to << " with cost " << edge.path.size() << std::endl;
+            LOG_DEBUG("Edge from Cluster " << edge.from << " to Cluster " << edge.to << " with cost " << edge.path.size());
 		}
 		for (const auto& e : ablv.abstractEdges) {
-			std::cerr << "  ABEDGE: " << e.from << " to " << e.to << " p: " << e.path.size() << std::endl;
+            LOG_DEBUG("  ABEDGE: " << e.from << " to " << e.to << " p: " << e.path.size());
 			const auto& f = ablv.abstractNodes[e.from];
 			const auto& t = ablv.abstractNodes[e.to];
-			std::cerr << "    CENTER: " << f.center.first << "," << f.center.second << " to: " << t.center.first << "," << t.center.second << std::endl;
-			std::cerr << "    BASE F:" << f.baseCenterNode << " FROM: " << graph.baseNodes[f.baseCenterNode].first << "," << graph.baseNodes[f.baseCenterNode].second << std::endl;
-			std::cerr << "    BASE T:" << t.baseCenterNode << " TO  : " << graph.baseNodes[t.baseCenterNode].first << "," << graph.baseNodes[t.baseCenterNode].second << std::endl;
+            LOG_DEBUG("    CENTER: " << f.center.first << "," << f.center.second << " to: " << t.center.first << "," << t.center.second);
+            LOG_DEBUG("    BASE F:" << f.baseCenterNode << " FROM: " << graph.baseNodes[f.baseCenterNode].first << "," << graph.baseNodes[f.baseCenterNode].second);
+            LOG_DEBUG("    BASE T:" << t.baseCenterNode << " TO  : " << graph.baseNodes[t.baseCenterNode].first << "," << graph.baseNodes[t.baseCenterNode].second);
 			for (const auto& p : e.path) {
 				if (tempGrid[p.second][p.first] == (GridToGraph::XPND << 2)) continue;
 				tempGrid[p.second][p.first] = GridToGraph::XPND << 1;
-				std::cerr << "      " << p.first << "," << p.second << std::endl;
+                LOG_DEBUG("      " << p.first << "," << p.second);
 			}
 			if (f.baseCenterNode != -1) {
 				tempGrid[graph.baseNodes[f.baseCenterNode].second][graph.baseNodes[f.baseCenterNode].first] = GridToGraph::XPND << 2;
-				std::cerr << "##SET F " << graph.baseNodes[f.baseCenterNode].first << ","
-					<< graph.baseNodes[f.baseCenterNode].second << std::endl;
+                LOG_DEBUG("##SET F " << graph.baseNodes[f.baseCenterNode].first << ","
+                    << graph.baseNodes[f.baseCenterNode].second);
 			}
 			if (t.baseCenterNode != -1) {
 				tempGrid[graph.baseNodes[t.baseCenterNode].second][graph.baseNodes[t.baseCenterNode].first] = GridToGraph::XPND << 2;
-				std::cerr << "##SET F" << graph.baseNodes[t.baseCenterNode].first << ","
-					<< graph.baseNodes[t.baseCenterNode].second << std::endl;
+                LOG_DEBUG("##SET F" << graph.baseNodes[t.baseCenterNode].first << ","
+                    << graph.baseNodes[t.baseCenterNode].second);
 			}
 		}
-		std::cerr << "\nBase Nodes:  " << graph.baseNodes.size() << std::endl;
+        LOG_DEBUG("");
+        LOG_DEBUG("Base Nodes:  " << graph.baseNodes.size());
 		int i = 0;
 		for (const auto& node : graph.baseNodes) {
-			std::cerr << "  " << i++ << " " << node.first << "," << node.second << std::endl;
+            LOG_DEBUG("  " << i++ << " " << node.first << "," << node.second);
 		}
 
-		std::cerr << "NODES: " << graph.baseNodes.size() << std::endl
-			<< "DENDS: " << graph.deadEnds.size() << std::endl
-			<< "EDGES: " << graph.baseEdges.size() << std::endl
-			<< std::endl
-			<< "ABNOD: " << ablv.abstractNodes.size() << std::endl
-			<< "ABEDG: " << ablv.abstractEdges.size() << std::endl;
+        LOG_DEBUG("NODES: " << graph.baseNodes.size());
+        LOG_DEBUG("DENDS: " << graph.deadEnds.size());
+        LOG_DEBUG("EDGES: " << graph.baseEdges.size());
+        LOG_DEBUG("ABNOD: " << ablv.abstractNodes.size());
+        LOG_DEBUG("ABEDG: " << ablv.abstractEdges.size());
 
 		makeTGA("GRID_FULL.tga", tempGrid);
 		for (int i = 0; i < graph.baseEdges.size(); ++i) {
 			const Edge& e = graph.baseEdges[i];
-			std::cerr << "Path: " << i << " F:" << e.from << " T:" << e.to << (e.toDeadEnd ? " DEAD" : "") << std::endl;
+            LOG_DEBUG("Path: " << i << " F:" << e.from << " T:" << e.to << (e.toDeadEnd ? " DEAD" : ""));
 			if (e.toDeadEnd) continue;
-			for (const auto& p : e.path) {
-				std::cerr << "  " << p.first << "," << p.second << std::endl;
-			}
+            LOG_DEBUG_FOR(const auto& p : e.path,
+                "  " << p.first << "," << p.second);
 		}
 
 		for (int col = 0; col < graph.infoGrid[0].size(); ++col) {
-			if (col > 9) std::cerr << col << "  ";
-			else std::cerr << col << "   ";
+            if (col > 9) LOG_DEBUG(col << "  ");
+            else LOG_DEBUG(col << "   ");
 		}
-		std::cerr << std::endl;
-		std::cerr << "INFO GRID (nodes/edges)" << std::endl;
+        LOG_DEBUG("");
+        LOG_DEBUG("INFO GRID (nodes/edges)");
 		for (int row = 0; row < graph.infoGrid.size(); ++row) {
 
-			if (row > 9) std::cerr << row << "  " << std::endl;
-			else std::cerr << row << "   " << std::endl;
+            if (row > 9) LOG_DEBUG(row << "  ");
+            else LOG_DEBUG(row << "   ");
 
 			for (int col = 0; col < graph.infoGrid[0].size(); ++col) {
 				int n = graph.infoGrid[row][col];
 				if (n & NODE) {
 					n &= 0xffff;
 					if (n >= 10) {
-						std::cerr << n << "n ";
+                        LOG_DEBUG_CONT(n << "n ");
 					}
 					else if (n >= 0) {
-						std::cerr << n << "n  ";
+                        LOG_DEBUG_CONT(n << "n  ");
 					}
 					else {
-						std::cerr << "--- ";
+                        LOG_DEBUG_CONT("--- ");
 					}
 				}
 				else if (n & EDGE) {
 					int e = n & GridType::EDGE_MASK;
 					if (e >= 100) {
-						std::cerr << e << "e";
+                        LOG_DEBUG_CONT(e << "e");
 					}
 					else if (e >= 10) {
-						std::cerr << e << "e ";
+                        LOG_DEBUG_CONT(e << "e ");
 					}
 					else if (e >= 0) {
-						std::cerr << e << "e  ";
+                        LOG_DEBUG_CONT(e << "e  ");
 					}
 					else {
-						std::cerr << "--- ";
+                        LOG_DEBUG_CONT("--- ");
 					}
 				}
 				else if (n & XPND) {
 					int c = n & 0xffff;
 					if (c >= 100) {
-						std::cerr << c << "c";
+						LOG_DEBUG_CONT(c << "c");
 					}
 					else if (c >= 10) {
-						std::cerr << c << "c ";
+						LOG_DEBUG_CONT(c << "c ");
 					}
 					else if (c >= 0) {
-						std::cerr << c << "c  ";
+						LOG_DEBUG_CONT(c << "c  ");
 					}
 					else {
-						std::cerr << "--- ";
+						LOG_DEBUG_CONT("--- ");
 					}
 				}
 				else {
-					std::cerr << "--- ";
+					LOG_DEBUG_CONT("--- ");
 				}
 			}
-			std::cerr << " #" << std::endl;
+            LOG_DEBUG(" #");
 		}
 
 		bool toggle = true;
-		std::cerr << "NAV GRID (closet absNode/baseNode)" << std::endl;
-		std::cerr << "    ";
+        LOG_DEBUG("");
+        LOG_DEBUG("NAV GRID (closet absNode/baseNode)");
+        LOG_DEBUG_CONT("    ");
 		for (int col = 0; col < graph.infoGrid[0].size(); ++col) {
-			if (col > 9) std::cerr << col << "   ";
-			else std::cerr << col << "    ";
+			if (col > 9) LOG_DEBUG_CONT(col << "   ");
+			else LOG_DEBUG_CONT(col << "    ");
 		}
-		std::cerr << std::endl;
+        LOG_DEBUG("");
 		for (int row = 0; row < graph.infoGrid.size();) {
 
 			if (toggle) {
-				if (row > 9) std::cerr << row << "  ";
-				else std::cerr << row << "   ";
+				if (row > 9) LOG_DEBUG_CONT(row << "  ");
+				else LOG_DEBUG_CONT(row << "   ");
 				for (int col = 0; col < graph.infoGrid[0].size(); ++col) {
 					if (graph.infoGrid[row][col] & WALL) {
-						std::cerr << "     ";
+						LOG_DEBUG_CONT("     ");
 						continue;
 					}
 					Point p = { col, row };
 					auto it = std::find(graph.baseNodes.begin(), graph.baseNodes.end(), p);
 					if (it == graph.baseNodes.end()) {
-						std::cerr << "     ";
+						LOG_DEBUG_CONT("     ");
 						continue;
 					}
 
 					int baseIdx = std::distance(graph.baseNodes.begin(), it);
 					if (baseIdx >= 10) {
-						std::cerr << baseIdx;
+						LOG_DEBUG_CONT(baseIdx);
 					}
 					else {
-						std::cerr << baseIdx << " ";
+						LOG_DEBUG_CONT(baseIdx << " ");
 					}
 					int abIdx = 0;
 					for (AbstractNode abNod : ablv.abstractNodes) {
 						if (abNod.baseCenterNode == baseIdx) {
 							if (abIdx >= 10) {
-								std::cerr << "/" << abIdx;
+								LOG_DEBUG_CONT("/" << abIdx);
 							}
 							else {
-								std::cerr << "/" << abIdx << " ";
+								LOG_DEBUG_CONT("/" << abIdx << " ");
 							}
 							abIdx = -1;
 							break;
@@ -2512,29 +2337,30 @@ void debugDump(const Graph& graph)
 						++abIdx;
 					}
 					if (abIdx != -1) {
-						std::cerr << "   ";
+						LOG_DEBUG_CONT("   ");
 					}
 				}
-				std::cerr << std::endl;
+                LOG_DEBUG("");
 				toggle = false;
 				continue;
 			}
-			std::cerr << "    ";
+            LOG_DEBUG_CONT("    ");
 
 			toggle = true;
 
 			++row;
 		}
 
-		std::cerr << "ABSTRACT NODES (abnod / base center)" << std::endl;
+        LOG_DEBUG("");
+        LOG_DEBUG("ABSTRACT NODES (abnod / base center)");
 		for (int col = 0; col < graph.infoGrid[0].size(); ++col) {
-			if (col > 9) std::cerr << col << "   ";
-			else std::cerr << col << "    ";
+			if (col > 9) LOG_DEBUG_CONT(col << "   ");
+			else LOG_DEBUG_CONT(col << "    ");
 		}
 		for (int row = 0; row < graph.infoGrid.size(); ++row) {
 
-			if (row > 9) std::cerr << row << "   " << std::endl;
-			else std::cerr << row << "    " << std::endl;
+            if (row > 9) LOG_DEBUG(row << "   ");
+            else LOG_DEBUG(row << "    ");
 
 			for (int col = 0; col < graph.infoGrid[0].size(); ++col) {
 				bool found = false;
@@ -2544,10 +2370,10 @@ void debugDump(const Graph& graph)
 					if (p.first == col && p.second == row) {
 						int b = n.baseCenterNode;
 						if (b >= 10) {
-							std::cerr << nidx << "/" << b << " ";
+							LOG_DEBUG_CONT(nidx << "/" << b << " ");
 						}
 						else {
-							std::cerr << nidx << "/" << b << "  ";
+							LOG_DEBUG_CONT(nidx << "/" << b << "  ");
 						}
 						found = true;
 						break;
@@ -2560,10 +2386,10 @@ void debugDump(const Graph& graph)
 						for (const auto& p : e.path) {
 							if (p.first == col && p.second == row) {
 								if (eidx >= 10) {
-									std::cerr << eidx << "e  ";
+									LOG_DEBUG_CONT(eidx << "e  ");
 								}
 								else {
-									std::cerr << eidx << "e   ";
+									LOG_DEBUG_CONT(eidx << "e   ");
 								}
 								found = true;
 								break;
@@ -2574,31 +2400,29 @@ void debugDump(const Graph& graph)
 					}
 				}
 				if (!found) {
-					std::cerr << "---- ";
+					LOG_DEBUG_CONT("---- ");
 				}
 			}
-			std::cerr << " #" << std::endl;
+            LOG_DEBUG(" #");
 		}
 
-		std::cerr << "WALLS" << std::endl;
+        LOG_DEBUG("WALLS");
 		for (int col = 0; col < graph.infoGrid[0].size(); ++col) {
 			if (col % 10) {
-				std::cerr << " ";
+                LOG_DEBUG_CONT(" ");
 			}
 			else {
-				std::cerr << (col / 10);
+                LOG_DEBUG_CONT((col / 10));
 			}
 		}
-		std::cerr << std::endl;
-		for (int col = 0; col < graph.infoGrid[0].size(); ++col) {
-			std::cerr << (col % 10);
-		}
-		std::cerr << std::endl;
+        LOG_DEBUG("");
+        LOG_DEBUG_FOR(int col = 0; col < graph.infoGrid[0].size(); ++col,
+            (col % 10));
 		for (int row = 0; row < graph.infoGrid.size(); ++row) {
 			for (int col = 0; col < graph.infoGrid[0].size(); ++col) {
-				std::cerr << ((graph.infoGrid[row][col] & WALL) ? "#" : " ");
+                LOG_DEBUG_CONT(((graph.infoGrid[row][col] & WALL) ? "#" : " "));
 			}
-			std::cerr << " " << row << std::endl;
+            LOG_DEBUG(" " << row);
 		}
         ++lv;
 	}
@@ -2654,11 +2478,11 @@ std::vector<std::vector<int>> readGridFromFile(const std::string& filename)
 #ifndef NO_DEBUG
 void debugZoneEdges(int pass, const AbstractLevel& ablv, const Graph& graph)
 {
-	std::cerr << "## ZONE EDGES DETAILED DUMP" << std::endl;
-	std::cerr << "================================================" << std::endl;
+    LOG_INFO("## ZONE EDGES DETAILED DUMP");
+    LOG_INFO("================================================");
 	
 	// First, show all edges and which zones they should belong to
-	std::cerr << "ALL EDGES AND THEIR ZONE SPANS:" << std::endl;
+    LOG_DEBUG("ALL EDGES AND THEIR ZONE SPANS:");
 	for (int edgeIdx = 0; edgeIdx < graph.baseEdges.size(); ++edgeIdx) {
 		const auto& edge = graph.baseEdges[edgeIdx];
 		GridType::Point from = edge.path.front();
@@ -2666,38 +2490,27 @@ void debugZoneEdges(int pass, const AbstractLevel& ablv, const Graph& graph)
 		int fromZone = ablv.zoneGrid[from.second][from.first].closestAbstractNodeIdx;
 		int toZone = ablv.zoneGrid[to.second][to.first].closestAbstractNodeIdx;
 		
-		std::cerr << "Edge " << edgeIdx << ": (" << from.first << "," << from.second << ") -> (" 
-			<< to.first << "," << to.second << ") spans zones " << fromZone << " -> " << toZone;
-		if (fromZone != toZone) {
-			std::cerr << " (CROSSES ZONES)";
-		}
-		std::cerr << std::endl;
+        LOG_DEBUG("Edge " << edgeIdx << ": (" << from.first << "," << from.second << ") -> ("
+            << to.first << "," << to.second << ") spans zones " << fromZone << " -> " << toZone
+            << ((fromZone != toZone) ? " (CROSSES ZONES)" : ""));
 	}
 	
-	std::cerr << "\nZONE CONTENTS:" << std::endl;
+    LOG_DEBUG("");
+    LOG_DEBUG("ZONE CONTENTS:");
 	for (int zoneIdx = 0; zoneIdx < ablv.zones.size(); ++zoneIdx) {
 		const auto& zone = ablv.zones[zoneIdx];
-		std::cerr << "Zone " << zoneIdx << ":" << std::endl;
-		std::cerr << "  Base Nodes (" << zone.baseNodeIdxs.size() << "): ";
-		for (const auto& nodeIdx : zone.baseNodeIdxs) {
-			std::cerr << nodeIdx << " ";
-		}
-		std::cerr << std::endl;
+        LOG_DEBUG("Zone " << zoneIdx << ":");
+        LOG_DEBUG_CONT("  Base Nodes (" << zone.baseNodeIdxs.size() << "): ");
+        LOG_DEBUG_FOR(const auto& nodeIdx : zone.baseNodeIdxs, nodeIdx << " ");
 		
-		std::cerr << "  Base Edges (" << zone.baseEdgeIdxs.size() << "): ";
-		for (const auto& edgeIdx : zone.baseEdgeIdxs) {
-			std::cerr << edgeIdx << " ";
-		}
-		std::cerr << std::endl;
+        LOG_DEBUG_CONT("  Base Edges (" << zone.baseEdgeIdxs.size() << "): ");
+        LOG_DEBUG_FOR(const auto& edgeIdx : zone.baseEdgeIdxs, edgeIdx << " ");
 		
-		std::cerr << "  Adjacent Zones: ";
-		for (const auto& adjZone : zone.adjacentZones) {
-			std::cerr << adjZone << " ";
-		}
-		std::cerr << std::endl;
+        LOG_DEBUG_CONT("  Adjacent Zones: ");
+        LOG_DEBUG_FOR(const auto& adjZone : zone.adjacentZones, adjZone << " ");
 		
 		// Show which edges should be in this zone but aren't
-		std::cerr << "  MISSING EDGES (should be here but aren't): ";
+        LOG_DEBUG_CONT("  MISSING EDGES (should be here but aren't): ");
 		for (int edgeIdx = 0; edgeIdx < graph.baseEdges.size(); ++edgeIdx) {
 			const auto& edge = graph.baseEdges[edgeIdx];
 			GridType::Point from = edge.path.front();
@@ -2710,14 +2523,40 @@ void debugZoneEdges(int pass, const AbstractLevel& ablv, const Graph& graph)
 			bool isHere = (std::find(zone.baseEdgeIdxs.begin(), zone.baseEdgeIdxs.end(), edgeIdx) != zone.baseEdgeIdxs.end());
 			
 			if (shouldBeHere && !isHere) {
-				std::cerr << edgeIdx << " ";
+                LOG_DEBUG_CONT(edgeIdx << " ");
 			}
 		}
-		std::cerr << std::endl;
-		std::cerr << "---" << std::endl;
+        LOG_DEBUG("");
+        LOG_DEBUG("---");
 	}
 }
 #endif
 
+#ifndef NO_DEBUG
+void debugExpandedPaths(const Grid& infoGrid)
+{
+    for (int r = 0; r < infoGrid.size(); ++r) {
+        for (int c = 0; c < infoGrid[0].size(); ++c) {
+            int cell = infoGrid[r][c];
+            if (!(cell & XPND)) continue;
+            int x = c;
+            int y = r;
+            do {
+                int dir = get_XPND_DIR(cell);
+                int dst = get_XPND_DIST(cell);
+                for (int d = 0; d < dst; ++d) {
+                    x += directions8[dir].first;
+                    y += directions8[dir].second;
+                    cell = infoGrid[y][x];
+                    if (cell & WALL) {
+                        LOG_DEBUG("ERROR: From " << c << "," << r << " moving in " << dir << " for " << dst
+                            << ". When at " << x << "," << y << " (dst:" << d + 1 << ") hit WALL");
+                    }
+                }
+            } while (cell & XPND);
+        }
+    }
+}
+#endif
 } // namespace
 

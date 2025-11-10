@@ -8,6 +8,8 @@
 
 #include "GridTypes.hpp"
 
+#include "Debug.h"
+
 // Forward Dec
 namespace GridToGraph {
 	struct Graph;
@@ -34,7 +36,7 @@ namespace FlowField {
 		inline const std::vector<uint16_t>& getFlow(int adjZone) const {
 			static const std::vector<uint16_t> emptyFlow = {};
 			for (const auto& pair : costFlowFields) if (pair.first == adjZone) return pair.second;
-			std::cerr << "ERROR: " << adjZone << " not an adjacent zone" << std::endl;
+			LOG_ERROR("getFlow zone:" << adjZone << " not an adjacent zone");
 			return emptyFlow;
 		}
 

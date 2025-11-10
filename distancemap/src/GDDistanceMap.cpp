@@ -25,6 +25,8 @@
 #include "GridTypes.hpp"
 #include "MathUtils.h"
 
+#include "Debug.h"
+
 using namespace godot;
 
 void GDDistanceMap::_bind_methods() {
@@ -48,20 +50,20 @@ GDDistanceMap::~GDDistanceMap() {
 GDDistanceMap* GDDistanceMap::setCaveSize(godot::Vector2i sz) {
 	info.mCaveWidth = sz.width;
 	info.mCaveHeight = sz.height;
-	std::cerr << "SET CAVE: " << info.mCaveWidth << "x" << info.mCaveHeight << std::endl;
+    LOG_INFO("SET CAVE: " << info.mCaveWidth << "x" << info.mCaveHeight);
 	return this;
 }
 
 GDDistanceMap* GDDistanceMap::setCellSize(godot::Vector2i sz) {
 	info.mCellWidth = sz.width;
 	info.mCellHeight = sz.height;
-	std::cerr << "CELL: " << info.mCellWidth << "x" << info.mCellHeight << std::endl;
+    LOG_INFO("SET CELL: " << info.mCellWidth << "x" << info.mCellHeight);
 	return this;
 }
 
 GDDistanceMap* GDDistanceMap::setFloor(godot::Vector2i floor) {
 	info.mFloor = floor;
-	std::cerr << "FLOOR: " << info.mFloor.x << "x" << info.mFloor.y << std::endl;
+    LOG_INFO("SET FLOOR: " << info.mFloor.x << "x" << info.mFloor.y);
 	return this;
 }
 
@@ -70,10 +72,11 @@ void GDDistanceMap::make_it(TileMapLayer* pTileMap, int layer)
 	info.pTileMap = pTileMap;
 	info.mLayer = layer;
 
-	std::cerr << "=== COPY TILEMAP " << info.mCaveWidth << "x" << info.mCaveHeight
-			<< " border:" << info.mBorderWidth << "," << info.mBorderHeight
-			<< std::endl;
+    LOG_INFO("====================================================="
+        << "##Make DistanceMap tileMap : " << info.mCaveWidth << "x" << info.mCaveHeight
+        << " border:" << info.mBorderWidth << "," << info.mBorderHeight);
 
+    LOG_DEBUG("  Copy tileMap");
     std::vector<std::vector<int>> grid;
     for (int y=0; y < info.mCaveHeight+info.mBorderHeight*2; ++y) {
     	std::vector<int> row;
@@ -88,11 +91,13 @@ void GDDistanceMap::make_it(TileMapLayer* pTileMap, int layer)
     //
     // Make a grid of distance to closest wall (0 = wall)
     //
+    LOG_INFO("## makeWallDistanceGrid");
     wallDistGrid = DistanceMap::makeWallDistanceGrid(grid);
 
     //
     // Make a SightGrid which can return the distance to wall (N,S,E,W)
     //
+    LOG_INFO("## makeSightGrid");
     sightGrid = DistanceMap::makeSightGrid(grid);
 
     //
@@ -112,6 +117,7 @@ void GDDistanceMap::make_it(TileMapLayer* pTileMap, int layer)
     //
     // Use that floorGrid to create the complete graph for movement
     //
+    LOG_INFO("## makeGraph");
     graph = GridToGraph::makeGraph(floorGrid);
 
 }
@@ -126,7 +132,7 @@ Vector2i GDDistanceMap::getMapPos(int x, int y) {
 
 static void untrack_cb(godot::Node* id, void* ctx) {
 	if (ctx) {
-		std::cerr << "===UNTRACK id:" << id << " CTX: " << ctx << std::endl;
+        LOG_DEBUG("===UNTRACK id:" << id << " CTX: " << ctx);
 		Router::RouteCtx* routeCtx = static_cast<Router::RouteCtx*>(ctx);
 		delete routeCtx;
 	}
@@ -136,10 +142,10 @@ float GDDistanceMap::getMove(godot::Node* id, godot::Vector2 from, godot::Vector
     Router::RouteCtx* ctx = pTracker ? pTracker->getContext<Router::RouteCtx>(id) : nullptr;
 
     if (!ctx) {
-		std::cerr << "===CREATE CONTEXT" << std::endl;
+        LOG_DEBUG("===TRACK => CREATE CONTEXT");
 		ctx = new Router::RouteCtx();
         pTracker->setContext<Router::RouteCtx>(id, ctx);
-		std::cerr << "===ADD CALLBACK" << std::endl;
+        LOG_DEBUG("===ADD UNTRACK CALLBACK");
         pTracker->set_untrack_callback(untrack_cb);
     }
 	return Router::getAngle(graph, info, ctx, from, to, type);

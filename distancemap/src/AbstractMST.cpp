@@ -16,6 +16,8 @@
 #include "gdextension_interface.h"
 #include "GridTypes.hpp"
 
+#include "Debug.h"
+
 using namespace GridType;
 
 AbstractMST::AbstractMST() {
@@ -145,7 +147,7 @@ void computeCandidateEdges(const BaseGraph& inBaseGraph,
     candidates.clear();
 
     // For each abstract node as a source:
-	std::cerr << "##MST: computeCandidateEdges: " << numAbstractNodes << std::endl;
+    LOG_DEBUG("##MST: computeCandidateEdges abNodes: " << numAbstractNodes);
     for (int i = 0; i < numAbstractNodes; ++i) {
         int startBase = abstractNodes[i].baseCenterNode;
         std::vector<int> costs;
@@ -163,20 +165,17 @@ void computeCandidateEdges(const BaseGraph& inBaseGraph,
             ce.to = j;
             ce.path = reconstructPath(startBase, targetBase, prevNodes, usedEdge, edges);
             ce.nodePath = reconstructBaseNodePath(startBase, targetBase, prevNodes); 
-            std::cerr << "NODEPATH:  " << i << std::endl << "    ";
-			for (auto n : ce.nodePath) {
-                std::cerr << "  " << n << " (" << baseNodes[n].first << "," << baseNodes[n].second << ")";
-			}
-            std::cerr << std::endl;
-			for (const auto& n : ce.path) {
-                std::cerr << "     (" << n.first << "," << n.second << ")";
-			}
-            std::cerr << std::endl;
+            LOG_DEBUG("NODEPATH:  " << i);
+			LOG_DEBUG_FOR(auto n : ce.nodePath,
+				"  " << n << " (" << baseNodes[n].first << "," << baseNodes[n].second << ")");
+			LOG_DEBUG_FOR(const auto& n : ce.path,
+                " (" << n.first << "," << n.second << ")");
 
             candidates.push_back(ce);
         }
+
     }
-	std::cerr << "   => " << candidates.size() << " candidates" << std::endl;
+    LOG_DEBUG("##=> " << candidates.size() << " candidates");
 }
 
 // Run Kruskal's algorithm on the candidate edges to build the MST over abstract nodes.
@@ -193,7 +192,7 @@ std::vector<AbstractEdge> buildMST(const std::vector<AbstractEdge>& candidates, 
     // Use a union-find structure to detect cycles.
     UnionFind uf(numAbstractNodes);
 
-	std::cerr << "MST: BUILD from " << sortedEdges.size() << " candidates" << std::endl;
+    LOG_INFO("MST: Build MST from " << sortedEdges.size() << " candidates");
     for (const AbstractEdge& ce : sortedEdges) {
         int setA = uf.find(ce.from);
         int setB = uf.find(ce.to);
@@ -205,7 +204,7 @@ std::vector<AbstractEdge> buildMST(const std::vector<AbstractEdge>& candidates, 
                 break;
         }
     }
-	std::cerr << "   ADDed MST EDGEs: " << mstEdges.size() << std::endl;
+    LOG_INFO("MST: DONE ADDed MST EDGEs: " << mstEdges.size());
 	return mstEdges;
 }
 
@@ -248,7 +247,7 @@ std::vector<AbstractEdge> AbstractMST::generateMSTAbstractEdges(const BaseGraph&
 	const std::vector<AbstractNode>& abstractNodes)
 {
     std::vector<AbstractEdge> candidates;
-	std::cerr << "##MST: generateMSTAbstractEdges: for " << abstractNodes.size() << " abstract nodes" << std::endl;
+    LOG_INFO("#MST: generateMSTAbstractEdges: for " << abstractNodes.size() << " abstract nodes");
     // Idea was to remove dup F -> T keep the shortest path, but multiple paths is allows for varied movement
     // std::vector<Edge> simpleEdges = simplifyEdges(edges);
     computeCandidateEdges(graph, edges, baseNodes, abstractNodes, candidates);
