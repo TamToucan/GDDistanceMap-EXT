@@ -111,7 +111,7 @@ struct Graph {
     GridType::Grid infoGrid;
     BaseGraph baseGraph;
     PathCostMap pathCostMap;
-    Routing::SparseGraph routingGraph;
+    Routing::SparseNavGraph routingGraph;
     std::vector<Edge> baseEdges;
     std::vector<GridType::Point> baseNodes;
     std::vector<GridType::Point> deadEnds;

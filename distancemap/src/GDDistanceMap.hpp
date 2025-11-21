@@ -6,12 +6,15 @@
 #include <map>
 #include <godot_cpp/classes/object.hpp>
 #include <godot_cpp/classes/tile_map_layer.hpp>
+#include "NavigationGraph.hpp"
+
 #include "GridToGraph.hpp"
 #include "Router.hpp"
 #include "GridTypes.hpp"
 #include "WallDistanceGrid.hpp"
 #include "GDTracker.hpp"
 #include "GDDistanceMapApi.h"
+#include "NavigationGraph.hpp"
 
 #include "Debug.h"
 
@@ -27,8 +30,8 @@ protected:
 
     GridType::Grid wallDistGrid;
     DistanceMap::SightGrid sightGrid;
-	GridToGraph::Graph graph;
-	GDTracker* pTracker = nullptr;
+    Routing::NavigationGraph navGraph;
+    GDTracker* pTracker = nullptr;
 
 public:
 	GDDistanceMap();

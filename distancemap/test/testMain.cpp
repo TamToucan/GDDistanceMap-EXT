@@ -8,8 +8,8 @@ using namespace godot;
 #include "GridTypes.hpp"
 #include "GridToGraph.hpp"
 #include "Router.hpp"
-
 #include "GDDistanceMap.hpp"
+#include "NavigationGraph.hpp"
 
 struct FlowField::SubGrid subgrid;
 
@@ -45,6 +45,10 @@ int main(int argc, char** argv)
 	info.mCaveHeight = 32;
 	info.mCellWidth = 8;
 	info.mCellHeight = 8;
+
+    Routing::NavigationGraph navGraph;
+    navGraph.initialize(graph, info);
+
 	Vector2 from(300, 250);
 	Vector2 to(1830, 986);
 	Router::RouteCtx* ctx = new Router::RouteCtx();
@@ -71,7 +75,7 @@ int main(int argc, char** argv)
 		pathGrid[fromPnt.second][fromPnt.first] = 'x';
 		std::cerr << "MOVEFROM: " << fromPnt.first <<","<< fromPnt.second << std::endl;
 
-		float ang = Router::getAngle(graph, info, ctx, from, to, 0);
+		float ang = navGraph.getMoveDirection(ctx, from, to, 0);
 		std::pair<float, float> mv = computeDirection(ang);
 		from.x += mv.first * 23;
 		from.y += mv.second * 23;

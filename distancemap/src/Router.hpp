@@ -58,6 +58,6 @@ struct Info {
 	int mLayer;
 };
 
-GDDISTANCE_MAP_API float getAngle( const GridToGraph::Graph& graph, const Info& info, RouteCtx* ctx, godot::Vector2 from, godot::Vector2 to, int type);
+
 
 } // namespace Router

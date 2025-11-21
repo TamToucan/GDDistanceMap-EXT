@@ -118,7 +118,8 @@ void GDDistanceMap::make_it(TileMapLayer* pTileMap, int layer)
     // Use that floorGrid to create the complete graph for movement
     //
     LOG_INFO("## makeGraph");
-    graph = GridToGraph::makeGraph(floorGrid);
+    auto graph = GridToGraph::makeGraph(floorGrid);
+    navGraph.initialize(graph, info);
 
 }
 
@@ -148,6 +149,6 @@ float GDDistanceMap::getMove(godot::Node* id, godot::Vector2 from, godot::Vector
         LOG_DEBUG("===ADD UNTRACK CALLBACK");
         pTracker->set_untrack_callback(untrack_cb);
     }
-	return Router::getAngle(graph, info, ctx, from, to, type);
+	return navGraph.getMoveDirection(ctx, from, to, type);
 }
 
