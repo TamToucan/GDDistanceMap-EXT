@@ -1,0 +1,160 @@
+#include <iostream>
+#include <string>
+#include <chrono>
+#include <godot_cpp/variant/vector2.hpp>
+
+using namespace godot;
+
+#include "GridTypes.hpp"
+#include "GridToGraph.hpp"
+#include "Router.hpp"
+#include "GDDistanceMap.hpp"
+#include "NavigationGraph.hpp"
+#include "DistanceMapNavigator.hpp"
+
+std::pair<float, float> computeDirection(float angleDeg) {
+	const double MYPI = 3.14159265358979323846;
+	double radians = angleDeg * (MYPI / 180.0);
+	return { std::cos(radians), std::sin(radians) };
+}
+
+bool testNavigator(const std::string& name, 
+                   std::function<float(Router::RouteCtx*, Vector2, Vector2, int)> getDirection,
+                   const GridToGraph::Graph& graph,
+                   const Router::Info& info,
+                   Vector2 from, Vector2 to) {
+    auto pathGrid = graph.infoGrid;
+    Router::RouteCtx* ctx = new Router::RouteCtx();
+    ctx->type = -1;
+    
+    int count = 1000;
+    bool reached_target = false;
+    GridType::Point toPnt = { 
+        static_cast<int>(to.x / (info.mCellWidth * 8)), 
+        static_cast<int>(to.y / (info.mCellHeight * 8)) 
+    };
+    GridType::Point prevPnt = toPnt;
+    
+    std::cout << "\n=== Testing " << name << " ===" << std::endl;
+    std::cout << "From: " << from.x << "," << from.y << " To: " << to.x << "," << to.y << std::endl;
+    
+    auto startTime = std::chrono::high_resolution_clock::now();
+    
+    do {
+        GridType::Point fromPnt = { 
+            static_cast<int>(from.x / (info.mCellWidth * 8)), 
+            static_cast<int>(from.y / (info.mCellHeight * 8)) 
+        };
+        reached_target = (fromPnt.first == toPnt.first && fromPnt.second == toPnt.second);
+        
+        if (prevPnt != fromPnt) {
+            if (pathGrid[fromPnt.second][fromPnt.first] == 'x') {
+                std::cerr << "ERROR: LOOPED BACK TO " << fromPnt.first << "," << fromPnt.second << std::endl;
+                break;
+            }
+        }
+        prevPnt = fromPnt;
+        
+        if (pathGrid[fromPnt.second][fromPnt.first] & GridType::WALL) {
+            std::cerr << "ERROR: WALL " << fromPnt.first << "," << fromPnt.second << std::endl;
+            break;
+        }
+        pathGrid[fromPnt.second][fromPnt.first] = 'x';
+        
+        float ang = getDirection(ctx, from, to, 0);
+        std::pair<float, float> mv = computeDirection(ang);
+        from.x += mv.first * 23;
+        from.y += mv.second * 23;
+        
+    } while (!reached_target && (--count > 0));
+    
+    auto endTime = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
+    
+    delete ctx;
+    
+    if (reached_target) {
+        std::cout << "✓ PATH FOUND in " << (1000 - count) << " steps" << std::endl;
+        std::cout << "  Time: " << duration.count() << " μs" << std::endl;
+    } else {
+        std::cout << "✗ NO PATH (stopped after " << (1000 - count) << " steps)" << std::endl;
+    }
+    
+    return reached_target;
+}
+
+int main(int argc, char** argv)
+{
+    std::cout << "=== Distance Map Navigator Test ===" << std::endl;
+    
+    auto grid = GridToGraph::readGridFromFile("GRID.txt");
+    auto graph = GridToGraph::makeGraph(grid);
+    
+    Router::Info info;
+    info.mCaveHeight = 32;
+    info.mCellWidth = 8;
+    info.mCellHeight = 8;
+    
+    // Initialize both navigators
+    Routing::NavigationGraph navGraph;
+    navGraph.initialize(graph, info);
+    
+    Routing::DistanceMapNavigator distMapNav;
+    distMapNav.initialize(graph.infoGrid, info);
+    
+    // Test cases
+    Vector2 from1(300, 250);
+    Vector2 to1(1830, 986);
+    
+    // Test original NavigationGraph
+    bool result1 = testNavigator(
+        "NavigationGraph (Original)",
+        [&navGraph](Router::RouteCtx* ctx, Vector2 from, Vector2 to, int type) {
+            return navGraph.getMoveDirection(ctx, from, to, type);
+        },
+        graph, info, from1, to1
+    );
+    
+    // Test new DistanceMapNavigator
+    bool result2 = testNavigator(
+        "DistanceMapNavigator (New)",
+        [&distMapNav](Router::RouteCtx* ctx, Vector2 from, Vector2 to, int type) {
+            return distMapNav.getMoveDirection(ctx, from, to, type);
+        },
+        graph, info, from1, to1
+    );
+    
+    // Performance test: Multiple agents
+    std::cout << "\n=== Performance Test: 100 Agents ===" << std::endl;
+    
+    std::vector<Vector2> agents;
+    for (int i = 0; i < 100; ++i) {
+        agents.push_back(Vector2(300 + i * 10, 250 + i * 5));
+    }
+    Vector2 target(1830, 986);
+    
+    // Test DistanceMapNavigator with multiple agents
+    auto startTime = std::chrono::high_resolution_clock::now();
+    for (int frame = 0; frame < 10; ++frame) {
+        for (auto& agent : agents) {
+            Router::RouteCtx ctx;
+            ctx.type = -1;
+            distMapNav.getMoveDirection(&ctx, agent, target, 0);
+        }
+    }
+    auto endTime = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(endTime - startTime);
+    
+    std::cout << "DistanceMapNavigator: 100 agents × 10 frames = " << duration.count() << " μs" << std::endl;
+    std::cout << "  Average per query: " << (duration.count() / 1000.0) << " μs" << std::endl;
+    
+    // Summary
+    std::cout << "\n=== Summary ===" << std::endl;
+    if (result1 && result2) {
+        std::cout << "✓ Both implementations found valid paths" << std::endl;
+        return 0;
+    } else {
+        std::cout << "✗ One or both implementations failed" << std::endl;
+        return 1;
+    }
+}
