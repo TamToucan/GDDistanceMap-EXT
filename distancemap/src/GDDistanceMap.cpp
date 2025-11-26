@@ -120,7 +120,7 @@ void GDDistanceMap::make_it(TileMapLayer* pTileMap, int layer)
     LOG_INFO("## makeGraph");
     auto graph = GridToGraph::makeGraph(floorGrid);
     navGraph.initialize(graph, info);
-
+    distMapNav.initialize(graph.infoGrid, info);
 }
 
 // ===========================================================================

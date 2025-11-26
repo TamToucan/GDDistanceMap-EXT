@@ -12,6 +12,16 @@
 
 namespace Routing {
 
+// NOTE: DistanceMapNavigator provides a simpler, more performant alternative
+// to this graph-based navigation system for scenarios with many agents moving
+// toward the same or slowly-changing target. See DistanceMapNavigator.hpp
+//
+// DistanceMapNavigator uses a flow field approach:
+//   - Computes distance map once when target changes (~1-3ms for 320x256 grid)
+//   - Answers queries in O(1) time via lookup
+//   - ~150 lines vs 370+ lines in this file
+//   - Only requires infoGrid (no nodes/edges/zones)
+
 class GDDISTANCE_MAP_API NavigationGraph {
 public:
     NavigationGraph();

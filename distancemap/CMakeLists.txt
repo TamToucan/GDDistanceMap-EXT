@@ -75,6 +75,34 @@ add_custom_command(TARGET testMain POST_BUILD
 )
 
 ##############################
+# Test for DistanceMapNavigator
+
+add_executable(testDistanceMap
+    test/testDistanceMap.cpp
+)
+
+add_dependencies(testDistanceMap copy_grid)
+
+target_link_libraries(testDistanceMap
+    PRIVATE MathStuff
+    PRIVATE Stuff
+    PRIVATE Algo
+    PRIVATE GDTracker::Tracker
+    PRIVATE GDDistanceMap
+    PUBLIC godot::cpp)
+
+target_include_directories(testDistanceMap PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
+
+# Copy DLLs to same folder as testDistanceMap.exe after build
+add_custom_command(TARGET testDistanceMap POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${GDDISTANCEMAP_DLL}" "$<TARGET_FILE_DIR:testDistanceMap>"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+	"${GDTRACKER_DLL}" "$<TARGET_FILE_DIR:testDistanceMap>"
+)
+
+
+##############################
 
 # target_compile_definitions(${LIB_NAME} PRIVATE GDDISTANCEMAP ${PROJECT_NAME}_EXPORTS)
 target_compile_definitions(${LIB_NAME} PRIVATE GDDISTANCEMAP_EXPORTS)

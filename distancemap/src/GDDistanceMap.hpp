@@ -15,6 +15,7 @@
 #include "GDTracker.hpp"
 #include "GDDistanceMapApi.h"
 #include "NavigationGraph.hpp"
+#include "DistanceMapNavigator.hpp"
 
 #include "Debug.h"
 
@@ -31,6 +32,7 @@ protected:
     GridType::Grid wallDistGrid;
     DistanceMap::SightGrid sightGrid;
     Routing::NavigationGraph navGraph;
+    Routing::DistanceMapNavigator distMapNav;
     GDTracker* pTracker = nullptr;
 
 public:
