@@ -19,6 +19,7 @@
 
 #include "Debug.h"
 
+namespace DistanceMap {
 namespace FlowField {
 
 // Maximum cost (our cost type is uint8_t, so 255 is max).
@@ -273,5 +274,6 @@ void debugFlow(int lev, int curZone, int adjacentZone, SubGrid subGrid)
     }
 }
 
+}
 }
 

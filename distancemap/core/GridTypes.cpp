@@ -4,6 +4,7 @@
 
 #include "Debug.h"
 
+namespace DistanceMap {
 namespace GridType
 {
 
@@ -75,4 +76,5 @@ BaseGraph buildBaseGraph(const std::vector<Edge>& edges, int numBaseNodes)
 	return graph;
 }
 
+}
 }

@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <iostream>
 
+namespace DistanceMap {
 namespace Routing {
 
 NavigationGraph::NavigationGraph() {}
@@ -540,3 +541,4 @@ float NavigationGraph::getMoveDirection(Router::RouteCtx* ctx, GridType::Vec2 fr
 }
 
 } // namespace Routing
+}

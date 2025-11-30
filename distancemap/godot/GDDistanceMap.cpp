@@ -21,6 +21,7 @@
 #include "Debug.h"
 
 using namespace godot;
+using namespace DistanceMap;
 
 void GDDistanceMap::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_floor", "floorTileCoords"), &GDDistanceMap::setFloor);
@@ -92,18 +93,18 @@ Vector2i GDDistanceMap::getMapPos(int x, int y) {
 static void untrack_cb(godot::Node* id, void* ctx) {
 	if (ctx) {
         LOG_DEBUG("===UNTRACK id:" << id << " CTX: " << ctx);
-		Router::RouteCtx* routeCtx = static_cast<Router::RouteCtx*>(ctx);
+		DistanceMap::Router::RouteCtx* routeCtx = static_cast<DistanceMap::Router::RouteCtx*>(ctx);
 		delete routeCtx;
 	}
 }
 
 float GDDistanceMap::getMove(godot::Node* id, godot::Vector2 from, godot::Vector2 to, int type) {
-    Router::RouteCtx* ctx = pTracker ? pTracker->getContext<Router::RouteCtx>(id) : nullptr;
+    DistanceMap::Router::RouteCtx* ctx = pTracker ? pTracker->getContext<DistanceMap::Router::RouteCtx>(id) : nullptr;
 
     if (!ctx) {
         LOG_DEBUG("===TRACK => CREATE CONTEXT");
-		ctx = new Router::RouteCtx();
-        pTracker->setContext<Router::RouteCtx>(id, ctx);
+		ctx = new DistanceMap::Router::RouteCtx();
+        pTracker->setContext<DistanceMap::Router::RouteCtx>(id, ctx);
         LOG_DEBUG("===ADD UNTRACK CALLBACK");
         pTracker->set_untrack_callback(untrack_cb);
     }

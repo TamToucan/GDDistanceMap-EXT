@@ -7,10 +7,10 @@
 #include <godot_cpp/classes/object.hpp>
 #include <godot_cpp/classes/tile_map_layer.hpp>
 
-#include "../DistanceMapCore.hpp"
-#include "../Router.hpp"
+#include "DistanceMapCore.hpp"
+#include "Router.hpp"
 #include "GDTracker.hpp"
-#include "../GDDistanceMapApi.h"
+#include "GDDistanceMapApi.h"
 #include "Debug.h"
 
 namespace godot {
@@ -21,11 +21,11 @@ class GDDISTANCE_MAP_API GDDistanceMap : public RefCounted {
 protected:
 	static void _bind_methods();
 
-	Router::Info info;
+	DistanceMap::Router::Info info;
     godot::Vector2i mFloor;
     godot::Vector2i mWall;
 
-    DistanceMapCore core;
+    DistanceMap::DistanceMapCore core;
     GDTracker* pTracker = nullptr;
 
 public:

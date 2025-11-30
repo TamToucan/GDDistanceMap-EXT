@@ -6,6 +6,9 @@
 #include "GridToGraph.hpp"
 #include "Router.hpp"
 #include "NavigationGraph.hpp"
+#include "FlowField.hpp"
+
+using namespace DistanceMap;
 
 struct FlowField::SubGrid subgrid;
 
@@ -37,7 +40,7 @@ int main(int argc, char** argv)
 	auto grid = GridToGraph::readGridFromFile("GRID.txt");
 	auto graph = GridToGraph::makeGraph(grid);
 	auto pathGrid(grid);
-	Router::Info info;
+	DistanceMap::Router::Info info;
 	info.mCaveHeight = 32;
 	info.mCellWidth = 8;
 	info.mCellHeight = 8;
@@ -45,17 +48,17 @@ int main(int argc, char** argv)
     Routing::NavigationGraph navGraph;
     navGraph.initialize(graph, info);
 
-	GridType::Vec2 from(300, 250);
-	GridType::Vec2 to(1830, 986);
-	Router::RouteCtx* ctx = new Router::RouteCtx();
+	DistanceMap::GridType::Vec2 from(300, 250);
+	DistanceMap::GridType::Vec2 to(1830, 986);
+	DistanceMap::Router::RouteCtx* ctx = new DistanceMap::Router::RouteCtx();
 	ctx->type = -1;
 	int count = 1000;
 	int mv = 1;
 	bool reached_target = false;
-	GridType::Point toPnt = { (int)(to.x / (info.mCellWidth * 8)), (int)(to.y / (info.mCellHeight * 8)) };
-	GridType::Point prevPnt = toPnt;
+	DistanceMap::GridType::Point toPnt = { (int)(to.x / (info.mCellWidth * 8)), (int)(to.y / (info.mCellHeight * 8)) };
+	DistanceMap::GridType::Point prevPnt = toPnt;
 	do {
-		GridType::Point fromPnt = { (int)(from.x / (info.mCellWidth * 8)), (int)(from.y / (info.mCellHeight * 8)) };
+		DistanceMap::GridType::Point fromPnt = { (int)(from.x / (info.mCellWidth * 8)), (int)(from.y / (info.mCellHeight * 8)) };
 		reached_target = (fromPnt.first == toPnt.first && fromPnt.second == toPnt.second);
 		if (prevPnt != fromPnt) {
 			if (pathGrid[fromPnt.second][fromPnt.first] == 'x') {
@@ -75,7 +78,7 @@ int main(int argc, char** argv)
 		std::pair<float, float> mv = computeDirection(ang);
 		from.x += mv.first * 23;
 		from.y += mv.second * 23;
-		GridType::Point nw = { (int)(from.x / (info.mCellWidth * 8)), (int)(from.y / (info.mCellHeight * 8)) };
+		DistanceMap::GridType::Point nw = { (int)(from.x / (info.mCellWidth * 8)), (int)(from.y / (info.mCellHeight * 8)) };
 		std::cerr << "CTV MV " << mv.first << "," << mv.second
 			<< "  ang " << ang<< " cell: " << fromPnt.first << "," << fromPnt.second
 			<< " -> " << nw.first << "," <<  nw.second << std::endl;

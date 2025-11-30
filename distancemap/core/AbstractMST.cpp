@@ -17,6 +17,8 @@
 
 #include "Debug.h"
 
+namespace DistanceMap {
+
 using namespace GridType;
 
 AbstractMST::AbstractMST() {
@@ -252,4 +254,5 @@ std::vector<AbstractEdge> AbstractMST::generateMSTAbstractEdges(const BaseGraph&
     computeCandidateEdges(graph, edges, baseNodes, abstractNodes, candidates);
     return buildMST(candidates, static_cast<int>(abstractNodes.size()));
 }
+} /* namespace DistanceMap */
 

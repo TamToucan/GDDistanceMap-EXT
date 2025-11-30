@@ -11,11 +11,13 @@
 #include "Debug.h"
 
 // Forward Dec
-namespace GridToGraph {
-	struct Graph;
+namespace DistanceMap {
+    namespace GridToGraph {
+	    struct Graph;
+    }
 }
 
-
+namespace DistanceMap {
 namespace FlowField {
 
 	constexpr uint8_t NO_DIR = 127;
@@ -50,6 +52,7 @@ namespace FlowField {
 
 void generateFlowGrids(GridToGraph::Graph& graph);
 
+}
 }
 
 #endif /* DISTANCEMAP_SRC_FLOWFIELD_HPP_ */

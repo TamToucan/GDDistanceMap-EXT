@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <iostream>
 
+namespace DistanceMap {
 namespace Routing {
 
 SparseNavGraph::SparseNavGraph() {}
@@ -621,3 +622,4 @@ SparseNavGraph buildSparseGraph(const std::vector<GridType::Point>& baseNodes,
 }
 
 } // namespace Routing
+}

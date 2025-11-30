@@ -8,6 +8,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
+namespace DistanceMap {
 namespace GridType {
 
     // InfoGrid has int's with bottom word set to an index
@@ -197,6 +198,7 @@ std::vector<int> checkConnectivity(const BaseGraph& graph, int numBaseNodes);
 
 BaseGraph buildBaseGraph(const std::vector<Edge>& edges, int numBaseNodes);
 
+}
 }
 
 #endif /* DISTANCEMAP_SRC_GRIDTYPES_HPP_ */

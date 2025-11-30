@@ -7,6 +7,7 @@
 #include "WallDistanceGrid.hpp"
 #include "GDDistanceMapApi.h"
 
+namespace DistanceMap {
 class GDDISTANCE_MAP_API DistanceMapCore {
 public:
     DistanceMapCore() = default;
@@ -22,3 +23,4 @@ private:
     Routing::NavigationGraph navGraph;
     Routing::DistanceMapNavigator distMapNav;
 };
+}

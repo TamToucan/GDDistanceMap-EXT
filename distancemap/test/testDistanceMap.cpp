@@ -10,6 +10,8 @@
 #include "NavigationGraph.hpp"
 #include "DistanceMapNavigator.hpp"
 
+using namespace DistanceMap;
+
 std::pair<float, float> computeDirection(float angleDeg) {
 	const double MYPI = 3.14159265358979323846;
 	double radians = angleDeg * (MYPI / 180.0);
@@ -17,12 +19,12 @@ std::pair<float, float> computeDirection(float angleDeg) {
 }
 
 bool testNavigator(const std::string& name, 
-                   std::function<float(Router::RouteCtx*, GridType::Vec2, GridType::Vec2, int)> getDirection,
+                   std::function<float(DistanceMap::Router::RouteCtx*, DistanceMap::GridType::Vec2, DistanceMap::GridType::Vec2, int)> getDirection,
                    const GridToGraph::Graph& graph,
-                   const Router::Info& info,
-                   GridType::Vec2 from, GridType::Vec2 to) {
+                   const DistanceMap::Router::Info& info,
+                   DistanceMap::GridType::Vec2 from, DistanceMap::GridType::Vec2 to) {
     auto pathGrid = graph.infoGrid;
-    Router::RouteCtx* ctx = new Router::RouteCtx();
+    DistanceMap::Router::RouteCtx* ctx = new DistanceMap::Router::RouteCtx();
     ctx->type = -1;
     
     int count = 1000;
@@ -88,7 +90,7 @@ int main(int argc, char** argv)
     auto grid = GridToGraph::readGridFromFile("GRID.txt");
     auto graph = GridToGraph::makeGraph(grid);
     
-    Router::Info info;
+    DistanceMap::Router::Info info;
     info.mCaveHeight = 32;
     info.mCellWidth = 8;
     info.mCellHeight = 8;
@@ -107,7 +109,7 @@ int main(int argc, char** argv)
     // Test original NavigationGraph
     bool result1 = testNavigator(
         "NavigationGraph (Original)",
-        [&navGraph](Router::RouteCtx* ctx, GridType::Vec2 from, GridType::Vec2 to, int type) {
+        [&navGraph](DistanceMap::Router::RouteCtx* ctx, DistanceMap::GridType::Vec2 from, DistanceMap::GridType::Vec2 to, int type) {
             return navGraph.getMoveDirection(ctx, from, to, type);
         },
         graph, info, from1, to1
@@ -116,7 +118,7 @@ int main(int argc, char** argv)
     // Test new DistanceMapNavigator
     bool result2 = testNavigator(
         "DistanceMapNavigator (New)",
-        [&distMapNav](Router::RouteCtx* ctx, GridType::Vec2 from, GridType::Vec2 to, int type) {
+        [&distMapNav](DistanceMap::Router::RouteCtx* ctx, DistanceMap::GridType::Vec2 from, DistanceMap::GridType::Vec2 to, int type) {
             return distMapNav.getMoveDirection(ctx, from, to, type);
         },
         graph, info, from1, to1
@@ -135,7 +137,7 @@ int main(int argc, char** argv)
     auto startTime = std::chrono::high_resolution_clock::now();
     for (int frame = 0; frame < 10; ++frame) {
         for (auto& agent : agents) {
-            Router::RouteCtx ctx;
+            DistanceMap::Router::RouteCtx ctx;
             ctx.type = -1;
             distMapNav.getMoveDirection(&ctx, agent, target, 0);
         }
