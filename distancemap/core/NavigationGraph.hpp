@@ -9,6 +9,7 @@
 #include "GridToGraph.hpp"
 #include "GDDistanceMapApi.h"
 
+namespace DistanceMap {
 namespace Routing {
 
 // NOTE: DistanceMapNavigator provides a simpler, more performant alternative
@@ -52,6 +53,7 @@ private:
     float computeAngle(double dx, double dy);
 };
 
+}
 }
 
 #endif

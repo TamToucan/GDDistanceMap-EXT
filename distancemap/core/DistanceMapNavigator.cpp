@@ -5,6 +5,7 @@
 #include <queue>
 #include <algorithm>
 
+namespace DistanceMap {
 namespace Routing {
 
 DistanceMapNavigator::DistanceMapNavigator() 
@@ -268,3 +269,4 @@ float DistanceMapNavigator::getMoveDirection(Router::RouteCtx* ctx, GridType::Ve
 }
 
 } // namespace Routing
+}

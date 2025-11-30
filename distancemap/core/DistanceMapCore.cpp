@@ -2,6 +2,8 @@
 #include "GridToGraph.hpp"
 #include "Debug.h"
 
+namespace DistanceMap {
+
 void DistanceMapCore::initialize(const std::vector<std::vector<int>>& grid, const Router::Info& info) {
     this->info = info;
 
@@ -34,4 +36,5 @@ void DistanceMapCore::initialize(const std::vector<std::vector<int>>& grid, cons
 
 float DistanceMapCore::getMove(Router::RouteCtx* ctx, GridType::Vec2 from, GridType::Vec2 to, int type) {
     return navGraph.getMoveDirection(ctx, from, to, type);
+}
 }

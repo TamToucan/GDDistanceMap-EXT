@@ -27,6 +27,8 @@
 #include "Debug.h"
 #include "TGA.hpp"
 
+namespace DistanceMap {
+
 using namespace GridType;
 
 namespace {
@@ -2559,4 +2561,5 @@ void debugExpandedPaths(const Grid& infoGrid)
 }
 #endif
 } // namespace
+}
 

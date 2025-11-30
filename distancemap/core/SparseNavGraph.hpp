@@ -11,8 +11,11 @@
 #include "GDDistanceMapApi.h"
 
 // Forward declaration
-namespace Router { struct RouteCtx; }
+namespace DistanceMap {
+    namespace Router { struct RouteCtx; }
+}
 
+namespace DistanceMap {
 namespace Routing {
 
 class GDDISTANCE_MAP_API SparseNavGraph {
@@ -108,5 +111,6 @@ SparseNavGraph buildSparseGraph(const std::vector<GridType::Point>& baseNodes,
                             const GridType::Grid& infoGrid);
 
 } // namespace Routing
+}
 
 #endif // SPARSE_NAV_GRAPH_HPP

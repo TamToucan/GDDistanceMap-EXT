@@ -26,12 +26,14 @@
 
 namespace Router { struct RouteCtx; }
 
+namespace DistanceMap {
 namespace Routing {
 
 // Core graph building functions
 MathStuff::Grid2D<uint32_t> makeEdgeGrid(const std::vector<GridType::Edge> edges, const GridType::Grid& grid);
 
 } // namespace Routing
+}
 
 #endif // ROUTING_HPP
        //

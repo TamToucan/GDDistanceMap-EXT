@@ -10,6 +10,7 @@
 
 #include "GridTypes.hpp"
 
+namespace DistanceMap {
 // Min Span Tree for the give AbstractNode using the graph of base edges/nodes
 // The BaseGragh is just a different view of the baseEdges/nodes
 class AbstractMST {
@@ -22,5 +23,6 @@ public:
 		const std::vector<GridType::Point>& baseNodes,
 		const std::vector<GridType::AbstractNode>& abstractNodes);
 };
+} /* namespace DistanceMap */
 
 #endif /* DISTANCEMAP_SRC_ABSTRACTMST_H_ */

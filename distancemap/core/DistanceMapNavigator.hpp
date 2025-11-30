@@ -9,6 +9,7 @@
 #include "Router.hpp"
 #include "GDDistanceMapApi.h"
 
+namespace DistanceMap {
 namespace Routing {
 
 /**
@@ -91,5 +92,6 @@ private:
 };
 
 } // namespace Routing
+}
 
 #endif // DISTANCE_MAP_NAVIGATOR_HPP

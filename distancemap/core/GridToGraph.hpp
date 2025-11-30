@@ -68,6 +68,7 @@
 //
 //
 
+namespace DistanceMap {
 namespace GridToGraph {
 
 GDDISTANCE_MAP_API std::vector<std::vector<int>> readGridFromFile(const std::string& filename);
@@ -124,6 +125,7 @@ struct Graph {
 //
 GDDISTANCE_MAP_API Graph makeGraph(const GridType::Grid& floorGrid);
 
+}
 }
 
 #endif /* DISTANCEMAP_SRC_GRIDTOGRAPH_HPP_ */

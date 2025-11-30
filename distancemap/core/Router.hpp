@@ -5,7 +5,7 @@
 #include "GridToGraph.hpp"
 #include "GDDistanceMapApi.h"
 
-
+namespace DistanceMap {
 namespace Router {
 
 struct RouteCtx {
@@ -55,3 +55,4 @@ struct Info {
 
 
 } // namespace Router
+}
