@@ -1,14 +1,12 @@
 #include <iostream>
 #include <string>
 #include <chrono>
-#include <godot_cpp/variant/vector2.hpp>
-
-using namespace godot;
+#include <cmath>
+#include <functional>
 
 #include "GridTypes.hpp"
 #include "GridToGraph.hpp"
 #include "Router.hpp"
-#include "GDDistanceMap.hpp"
 #include "NavigationGraph.hpp"
 #include "DistanceMapNavigator.hpp"
 
@@ -19,10 +17,10 @@ std::pair<float, float> computeDirection(float angleDeg) {
 }
 
 bool testNavigator(const std::string& name, 
-                   std::function<float(Router::RouteCtx*, Vector2, Vector2, int)> getDirection,
+                   std::function<float(Router::RouteCtx*, GridType::Vec2, GridType::Vec2, int)> getDirection,
                    const GridToGraph::Graph& graph,
                    const Router::Info& info,
-                   Vector2 from, Vector2 to) {
+                   GridType::Vec2 from, GridType::Vec2 to) {
     auto pathGrid = graph.infoGrid;
     Router::RouteCtx* ctx = new Router::RouteCtx();
     ctx->type = -1;
@@ -103,13 +101,13 @@ int main(int argc, char** argv)
     distMapNav.initialize(graph.infoGrid, info);
     
     // Test cases
-    Vector2 from1(300, 250);
-    Vector2 to1(1830, 986);
+    GridType::Vec2 from1(300, 250);
+    GridType::Vec2 to1(1830, 986);
     
     // Test original NavigationGraph
     bool result1 = testNavigator(
         "NavigationGraph (Original)",
-        [&navGraph](Router::RouteCtx* ctx, Vector2 from, Vector2 to, int type) {
+        [&navGraph](Router::RouteCtx* ctx, GridType::Vec2 from, GridType::Vec2 to, int type) {
             return navGraph.getMoveDirection(ctx, from, to, type);
         },
         graph, info, from1, to1
@@ -118,7 +116,7 @@ int main(int argc, char** argv)
     // Test new DistanceMapNavigator
     bool result2 = testNavigator(
         "DistanceMapNavigator (New)",
-        [&distMapNav](Router::RouteCtx* ctx, Vector2 from, Vector2 to, int type) {
+        [&distMapNav](Router::RouteCtx* ctx, GridType::Vec2 from, GridType::Vec2 to, int type) {
             return distMapNav.getMoveDirection(ctx, from, to, type);
         },
         graph, info, from1, to1
@@ -127,11 +125,11 @@ int main(int argc, char** argv)
     // Performance test: Multiple agents
     std::cout << "\n=== Performance Test: 100 Agents ===" << std::endl;
     
-    std::vector<Vector2> agents;
+    std::vector<GridType::Vec2> agents;
     for (int i = 0; i < 100; ++i) {
-        agents.push_back(Vector2(300 + i * 10, 250 + i * 5));
+        agents.push_back(GridType::Vec2(300 + i * 10, 250 + i * 5));
     }
-    Vector2 target(1830, 986);
+    GridType::Vec2 target(1830, 986);
     
     // Test DistanceMapNavigator with multiple agents
     auto startTime = std::chrono::high_resolution_clock::now();

@@ -1,14 +1,10 @@
 #include <iostream>
 #include <string>
-#include <godot_cpp/variant/vector2.hpp>
-
-using namespace godot;
-
+#include <cmath>
 
 #include "GridTypes.hpp"
 #include "GridToGraph.hpp"
 #include "Router.hpp"
-#include "GDDistanceMap.hpp"
 #include "NavigationGraph.hpp"
 
 struct FlowField::SubGrid subgrid;
@@ -49,17 +45,17 @@ int main(int argc, char** argv)
     Routing::NavigationGraph navGraph;
     navGraph.initialize(graph, info);
 
-	Vector2 from(300, 250);
-	Vector2 to(1830, 986);
+	GridType::Vec2 from(300, 250);
+	GridType::Vec2 to(1830, 986);
 	Router::RouteCtx* ctx = new Router::RouteCtx();
 	ctx->type = -1;
 	int count = 1000;
 	int mv = 1;
 	bool reached_target = false;
-	GridType::Point toPnt = { to.x / (info.mCellWidth * 8), to.y / (info.mCellHeight * 8) };
+	GridType::Point toPnt = { (int)(to.x / (info.mCellWidth * 8)), (int)(to.y / (info.mCellHeight * 8)) };
 	GridType::Point prevPnt = toPnt;
 	do {
-		GridType::Point fromPnt = { from.x / (info.mCellWidth * 8), from.y / (info.mCellHeight * 8) };
+		GridType::Point fromPnt = { (int)(from.x / (info.mCellWidth * 8)), (int)(from.y / (info.mCellHeight * 8)) };
 		reached_target = (fromPnt.first == toPnt.first && fromPnt.second == toPnt.second);
 		if (prevPnt != fromPnt) {
 			if (pathGrid[fromPnt.second][fromPnt.first] == 'x') {
@@ -79,7 +75,7 @@ int main(int argc, char** argv)
 		std::pair<float, float> mv = computeDirection(ang);
 		from.x += mv.first * 23;
 		from.y += mv.second * 23;
-		GridType::Point nw = { from.x / (info.mCellWidth * 8), from.y / (info.mCellHeight * 8) };
+		GridType::Point nw = { (int)(from.x / (info.mCellWidth * 8)), (int)(from.y / (info.mCellHeight * 8)) };
 		std::cerr << "CTV MV " << mv.first << "," << mv.second
 			<< "  ang " << ang<< " cell: " << fromPnt.first << "," << fromPnt.second
 			<< " -> " << nw.first << "," <<  nw.second << std::endl;

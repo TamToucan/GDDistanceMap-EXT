@@ -3,7 +3,6 @@
 
 #include <vector>
 #include <tuple>
-#include <godot_cpp/variant/vector2.hpp>
 #include "GridTypes.hpp"
 #include "SparseNavGraph.hpp"
 #include "Router.hpp"
@@ -30,7 +29,7 @@ public:
     void initialize(const GridToGraph::Graph& graphData, const Router::Info& info);
     
     // Main entry point for movement
-    float getMoveDirection(Router::RouteCtx* ctx, godot::Vector2 from, godot::Vector2 to, int type);
+    float getMoveDirection(Router::RouteCtx* ctx, GridType::Vec2 from, GridType::Vec2 to, int type);
 
 private:
     // Data members from GridToGraph::Graph

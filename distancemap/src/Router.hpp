@@ -1,9 +1,6 @@
 #pragma once
 
 #include <vector>
-#include <godot_cpp/variant/vector2.hpp>
-#include <godot_cpp/classes/tile_map_layer.hpp>
-
 #include "GridTypes.hpp"
 #include "GridToGraph.hpp"
 #include "GDDistanceMapApi.h"
@@ -52,11 +49,8 @@ struct Info {
 	int mCellHeight = 1;
 	int mStartCellX = 0;
 	int mStartCellY = 0;
-	godot::Vector2i mFloor;
-	godot::Vector2i mWall;
-	godot::TileMapLayer* pTileMap;
-	int mLayer;
 };
+
 
 
 

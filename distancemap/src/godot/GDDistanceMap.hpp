@@ -6,17 +6,11 @@
 #include <map>
 #include <godot_cpp/classes/object.hpp>
 #include <godot_cpp/classes/tile_map_layer.hpp>
-#include "NavigationGraph.hpp"
 
-#include "GridToGraph.hpp"
-#include "Router.hpp"
-#include "GridTypes.hpp"
-#include "WallDistanceGrid.hpp"
+#include "../DistanceMapCore.hpp"
+#include "../Router.hpp"
 #include "GDTracker.hpp"
-#include "GDDistanceMapApi.h"
-#include "NavigationGraph.hpp"
-#include "DistanceMapNavigator.hpp"
-
+#include "../GDDistanceMapApi.h"
 #include "Debug.h"
 
 namespace godot {
@@ -28,11 +22,10 @@ protected:
 	static void _bind_methods();
 
 	Router::Info info;
+    godot::Vector2i mFloor;
+    godot::Vector2i mWall;
 
-    GridType::Grid wallDistGrid;
-    DistanceMap::SightGrid sightGrid;
-    Routing::NavigationGraph navGraph;
-    Routing::DistanceMapNavigator distMapNav;
+    DistanceMapCore core;
     GDTracker* pTracker = nullptr;
 
 public:

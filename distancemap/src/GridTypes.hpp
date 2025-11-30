@@ -37,6 +37,14 @@ using Grid = std::vector<std::vector<int>>;
 using Point = std::pair<int, int>;
 using Path = std::vector<Point>;
 
+struct Vec2 {
+    float x, y;
+    Vec2() : x(0), y(0) {}
+    Vec2(float _x, float _y) : x(_x), y(_y) {}
+    bool operator==(const Vec2& other) const { return x == other.x && y == other.y; }
+    bool operator!=(const Vec2& other) const { return !(*this == other); }
+};
+
     // Directions for 8 neighbouring cells
 #if 0
 const static std::vector<GridType::Point> directions8 = {

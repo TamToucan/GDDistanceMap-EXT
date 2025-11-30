@@ -13,7 +13,6 @@
 #include <algorithm>
 #include <unordered_map>
 
-#include "gdextension_interface.h"
 #include "GridTypes.hpp"
 
 #include "Debug.h"

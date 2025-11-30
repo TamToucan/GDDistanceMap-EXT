@@ -477,7 +477,7 @@ GridType::Point NavigationGraph::getNextMove(Router::RouteCtx* ctx, GridType::Po
     return nextStep(source, target);
 }
 
-float NavigationGraph::getMoveDirection(Router::RouteCtx* ctx, godot::Vector2 from, godot::Vector2 to, int type) {
+float NavigationGraph::getMoveDirection(Router::RouteCtx* ctx, GridType::Vec2 from, GridType::Vec2 to, int type) {
     GridType::Point fromPnt = { from.x / (m_info.mCellWidth * 8), from.y / (m_info.mCellHeight * 8) };
     GridType::Point toPnt = { to.x / (m_info.mCellWidth * 8), to.y / (m_info.mCellHeight * 8) };
     LOG_DEBUG("---GETANGLE: " << from.x << "," << to.x << "  cell: " << m_info.mCellWidth << "x" << m_info.mCellHeight << " => " << fromPnt.first << "," << fromPnt.second

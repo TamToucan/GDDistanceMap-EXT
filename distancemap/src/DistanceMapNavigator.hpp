@@ -3,7 +3,8 @@
 
 #include <vector>
 #include <limits>
-#include <godot_cpp/variant/vector2.hpp>
+#include <vector>
+#include <limits>
 #include "GridTypes.hpp"
 #include "Router.hpp"
 #include "GDDistanceMapApi.h"
@@ -40,7 +41,7 @@ public:
      * @param type Movement type identifier for context switching
      * @return Angle in degrees [0, 360) to move toward target
      */
-    float getMoveDirection(Router::RouteCtx* ctx, godot::Vector2 from, godot::Vector2 to, int type);
+    float getMoveDirection(Router::RouteCtx* ctx, GridType::Vec2 from, GridType::Vec2 to, int type);
 
 private:
     /**

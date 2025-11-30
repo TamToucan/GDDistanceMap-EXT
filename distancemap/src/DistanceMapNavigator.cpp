@@ -204,7 +204,7 @@ GridType::Point DistanceMapNavigator::getNextMove(GridType::Point source, GridTy
     return next;
 }
 
-float DistanceMapNavigator::getMoveDirection(Router::RouteCtx* ctx, godot::Vector2 from, godot::Vector2 to, int type) {
+float DistanceMapNavigator::getMoveDirection(Router::RouteCtx* ctx, GridType::Vec2 from, GridType::Vec2 to, int type) {
     // Convert world coordinates to grid coordinates
     GridType::Point fromPnt = { 
         static_cast<int>(from.x / (m_info.mCellWidth * 8)), 
