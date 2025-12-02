@@ -12,13 +12,28 @@
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build",
             "cacheVariables": {
-		"CMAKE_C_COMPILER": "d:/Tools/MinGW/bin/gcc.exe",
+                "CMAKE_C_COMPILER": "d:/Tools/MinGW/bin/gcc.exe",
                 "CMAKE_CXX_COMPILER": "d:/Tools/MinGW/bin/g++.exe",
                 "CMAKE_CXX_STANDARD": "17",
                 "CMAKE_CXX_STANDARD_REQUIRED": "ON",
                 "CMAKE_CXX_EXTENSIONS": "OFF",
                 "CMAKE_BUILD_TYPE": "Debug",
                 "CMAKE_CXX_FLAGS": "-g -O0"
+            }
+        },
+        {
+            "name": "mingw64-release",
+            "displayName": "MinGW 64-bit Release",
+            "generator": "Ninja",
+            "binaryDir": "${sourceDir}/build-release",
+            "cacheVariables": {
+                "CMAKE_C_COMPILER": "d:/Tools/MinGW/bin/gcc.exe",
+                "CMAKE_CXX_COMPILER": "d:/Tools/MinGW/bin/g++.exe",
+                "CMAKE_CXX_STANDARD": "17",
+                "CMAKE_CXX_STANDARD_REQUIRED": "ON",
+                "CMAKE_CXX_EXTENSIONS": "OFF",
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_CXX_FLAGS": "-O3"
             }
         },
         {
@@ -39,7 +54,7 @@
                 "CXX": "cl"
             }
         },
-	{
+        {
             "name": "customer",
             "displayName": "Ccustom compiler path",
             "generator": "Ninja",
@@ -53,4 +68,3 @@
         }
     ]
 }
-

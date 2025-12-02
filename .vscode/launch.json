@@ -10,7 +10,7 @@
             "request": "launch",
             "program": "${workspaceRoot}/build/distanceMap/testMain.exe",
             "args": [],
-            "cwd": "${workspaceRoot}",
+            "cwd": "${workspaceRoot}/build/distancemap",
             "preLaunchTask": "Build Map Test (Debug)",
             "sourceMap": {
                 "/d/git/Cave": "${workspaceRoot}"

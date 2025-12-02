@@ -4,7 +4,7 @@
         {
             "label": "Build Map Test (Debug)",
             "type": "shell",
-            "command": "cmake --preset=debug -S . -B build && cmake --build build --target mainTest.exe",
+            "command": "cmake --preset=mingw64 -S . -B build && cmake --build build --target testMain",
             "options": {
                 "shell": {
                     "executable": "cmd.exe",
@@ -23,12 +23,14 @@
                 "clear": true,
                 "panel": "shared"
             },
-            "problemMatcher": "$gcc"
+            "problemMatcher": [
+                "$msCompile"
+            ]
         },
         {
             "label": "Build Map Test (Release)",
             "type": "shell",
-            "command": "cmake --preset=release -S . -B build && cmake --build build",
+            "command": "cmake --preset=mingw64-release -S . -B build-release && cmake --build build-release --target testMain",
             "options": {
                 "shell": {
                     "executable": "cmd.exe",
@@ -44,7 +46,9 @@
                 "clear": true,
                 "panel": "shared"
             },
-            "problemMatcher": "$gcc"
+            "problemMatcher": [
+                "$msCompile"
+            ]
         }
     ]
 }

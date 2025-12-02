@@ -2,5 +2,13 @@
     "lldb.displayFormat": "auto",
     "lldb.showDisassembly": "auto",
     "lldb.dereferencePointers": true,
-    "lldb.consoleMode": "commands"
+    "lldb.consoleMode": "commands",
+    "editor.multiCursorModifier": "alt",
+    "clangd.arguments": [
+        "--compile-commands-dir=${workspaceFolder}/build",
+        "--background-index",
+        "--clang-tidy",
+        "--query-driver=d:/Tools/MinGW/bin/g++.exe",
+        "--log=verbose"
+    ]
 }
