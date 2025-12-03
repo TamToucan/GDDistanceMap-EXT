@@ -22,7 +22,7 @@ target_link_libraries(${CORE_LIB_NAME}
     PUBLIC Algo)
 
 # Godot wrapper library
-set(GD_LIB_NAME GDDistanceMap)
+set(GD_LIB_NAME DistanceMap)
 file(GLOB_RECURSE GD_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/godot/*.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/godot/*.hpp"

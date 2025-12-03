@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 if (NOT ALL_SUBS_BUILD_ON)
-    project(gdextension-distaceMap)
+    project(distaceMap-lib)
     
     set(FETCHCONTENT_QUIET OFF)
     set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -26,19 +26,19 @@ if (NOT ALL_SUBS_BUILD_ON)
     	GIT_REPOSITORY https://github.com/TamToucan/Libs.git
     	GIT_TAG main
     )
-    if (NOT TARGET GDTracker)
-        # Only fetch GDTracker if it’s not already part of the build (superrepo included it)
+    if (NOT TARGET Tracker)
+        # Only fetch Tracker if it’s not already part of the build (superrepo included it)
         FetchContent_Declare(
         	GDTracker-EXT
-        	GIT_REPOSITORY https://github.com/TamToucan/GDTracker-EXT.git
+		GIT_REPOSITORY https://github.com/TamToucan/Tracker-LIB.git
         	GIT_TAG main
         )
-        FetchContent_MakeAvailable(GDTracker-EXT)
+FetchContent_MakeAvailable(Tracker-LIB)
     endif() 
     FetchContent_MakeAvailable(GDExtension Libs)
 else()
-    message(STATUS "GDDistanceMap-EXT is being built as part of Lott-EXT, skipping FetchContent.")
-endif()
+	message(STATUS "DistanceMap-LIB is being built as part of Lott-LIB, skipping FetchContent.")
+ndif()
 
 
 add_subdirectory(distancemap)
