@@ -33,12 +33,12 @@ if (NOT ALL_SUBS_BUILD_ON)
 		GIT_REPOSITORY https://github.com/TamToucan/Tracker-LIB.git
         	GIT_TAG main
         )
-FetchContent_MakeAvailable(Tracker-LIB)
+        FetchContent_MakeAvailable(Tracker-LIB)
     endif() 
     FetchContent_MakeAvailable(GDExtension Libs)
 else()
 	message(STATUS "DistanceMap-LIB is being built as part of Lott-LIB, skipping FetchContent.")
-ndif()
+endif()
 
 
 add_subdirectory(distancemap)
