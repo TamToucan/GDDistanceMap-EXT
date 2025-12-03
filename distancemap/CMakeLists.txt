@@ -1,4 +1,4 @@
-project(GDDistanceMap)
+project(DistanceMap-Lib)
 
 # Core library
 set(CORE_LIB_NAME distanceMap)
@@ -22,7 +22,7 @@ target_link_libraries(${CORE_LIB_NAME}
     PUBLIC Algo)
 
 # Godot wrapper library
-set(GD_LIB_NAME DistanceMap)
+set(GD_LIB_NAME GDDistanceMap)
 file(GLOB_RECURSE GD_SOURCES CONFIGURE_DEPENDS
     "${CMAKE_CURRENT_SOURCE_DIR}/godot/*.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/godot/*.hpp"
@@ -77,13 +77,13 @@ target_include_directories(testMain PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/core")
 
 # Define the DLL paths manually
 IF (ALL_SUBS_BUILD_ON)
-    set(GDDISTANCEMAP_DLL "${CMAKE_BINARY_DIR}/GDDistanceMap-EXT/distancemap/${GD_LIB_NAME}${CMAKE_SHARED_LIBRARY_SUFFIX}")
-    set(DISTANCEMAP_DLL "${CMAKE_BINARY_DIR}/GDDistanceMap-EXT/distancemap/${CORE_LIB_NAME}${CMAKE_SHARED_LIBRARY_SUFFIX}")
-    set(GDTRACKER_DLL "${CMAKE_BINARY_DIR}/GDTracker-EXT/tracker/GDTracker${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    set(GDDISTANCEMAP_DLL "${CMAKE_BINARY_DIR}/DistanceMap-Lib/distancemap/${GD_LIB_NAME}${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    set(DISTANCEMAP_DLL "${CMAKE_BINARY_DIR}/DistanceMap-Lib/distancemap/${CORE_LIB_NAME}${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    set(GDTRACKER_DLL "${CMAKE_BINARY_DIR}/Tracker-Lib/tracker/GDTracker${CMAKE_SHARED_LIBRARY_SUFFIX}")
 ELSE()
     set(GDDISTANCEMAP_DLL "${CMAKE_BINARY_DIR}/distancemap/${GD_LIB_NAME}${CMAKE_SHARED_LIBRARY_SUFFIX}")
     set(DISTANCEMAP_DLL "${CMAKE_BINARY_DIR}/distancemap/${CORE_LIB_NAME}${CMAKE_SHARED_LIBRARY_SUFFIX}")
-    set(GDTRACKER_DLL "${CMAKE_BINARY_DIR}/_deps/gdtracker-ext-build/tracker/GDTracker${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    set(GDTRACKER_DLL "${CMAKE_BINARY_DIR}/_deps/tracker-build/tracker/GDTracker${CMAKE_SHARED_LIBRARY_SUFFIX}")
 ENDIF()
 
 add_custom_command(TARGET testMain POST_BUILD
