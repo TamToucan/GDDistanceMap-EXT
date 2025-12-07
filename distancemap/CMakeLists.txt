@@ -39,7 +39,8 @@ target_include_directories(${GD_LIB_NAME} PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/g
 
 target_link_libraries(${GD_LIB_NAME}
     PRIVATE ${CORE_LIB_NAME}
-    PRIVATE GDTracker::Tracker
+    PRIVATE TrackerLib::Tracker
+    PRIVATE TrackerLib::GDTracker
     PUBLIC godot::cpp)
 
 ##############################
@@ -68,7 +69,8 @@ target_link_libraries(testMain
     PRIVATE MathStuff
     PRIVATE Stuff
     PRIVATE Algo
-    PRIVATE GDTracker::Tracker
+    PRIVATE TrackerLib::Tracker
+    PRIVATE TrackerLib::GDTracker
     PRIVATE ${GD_LIB_NAME}
     PRIVATE ${CORE_LIB_NAME}
     PUBLIC godot::cpp)
@@ -108,7 +110,8 @@ target_link_libraries(testDistanceMap
     PRIVATE MathStuff
     PRIVATE Stuff
     PRIVATE Algo
-    PRIVATE GDTracker::Tracker
+    PRIVATE TrackerLib::Tracker
+    PRIVATE TrackerLib::GDTracker
     PRIVATE ${GD_LIB_NAME}
     PRIVATE ${CORE_LIB_NAME}
     PUBLIC godot::cpp)
