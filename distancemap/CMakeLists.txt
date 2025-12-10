@@ -139,10 +139,10 @@ add_dependencies(${GD_LIB_NAME} GDTracker)
 add_custom_command(
     TARGET ${GD_LIB_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory "${LOTT_ADDON_DIR}"
-    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${GD_LIB_NAME}>" "${LOTT_ADDON_DIR}"
     COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${CORE_LIB_NAME}>" "${LOTT_ADDON_DIR}"
-    COMMAND ${CMAKE_COMMAND} -E echo_append "Attempting to copy GDTracker DLL... "
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "${GDTRACKER_DLL}" "${LOTT_ADDON_DIR}" || ${CMAKE_COMMAND} -E echo "GDTracker DLL not found, skipping."
+    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${GD_LIB_NAME}>" "${LOTT_ADDON_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:TrackerLib::Tracker>" "${LOTT_ADDON_DIR}"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:TrackerLib::GDTracker>" "${LOTT_ADDON_DIR}"
     COMMENT "Copying GDDistanceMap and GDTracker DLLs to addon dir"
 )
 
