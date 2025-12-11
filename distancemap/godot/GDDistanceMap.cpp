@@ -2,7 +2,6 @@
 #include <iostream>
 #include <vector>
 
-
 #include "GDDistanceMap.hpp"
 #include <gdextension_interface.h>
 #include <godot_cpp/classes/object.hpp>
@@ -13,10 +12,8 @@
 #include <godot_cpp/variant/vector2.hpp>
 #include <godot_cpp/variant/vector3.hpp>
 
-
 #include "Debug.h"
 #include "GDTracker.hpp"
-
 
 using namespace godot;
 using namespace DistanceMap;
@@ -24,6 +21,8 @@ using namespace DistanceMap;
 void GDDistanceMap::_bind_methods() {
   ClassDB::bind_method(D_METHOD("set_floor", "floorTileCoords"),
                        &GDDistanceMap::setFloor);
+  ClassDB::bind_method(D_METHOD("set_border_size", "borderSize"),
+                       &GDDistanceMap::setBorderSize);
   ClassDB::bind_method(D_METHOD("set_cave_size", "caveSize"),
                        &GDDistanceMap::setCaveSize);
   ClassDB::bind_method(D_METHOD("set_cell_size", "cellSize"),
@@ -41,6 +40,13 @@ GDDistanceMap::GDDistanceMap() {
 }
 
 GDDistanceMap::~GDDistanceMap() {}
+
+GDDistanceMap *GDDistanceMap::setBorderSize(godot::Vector2i sz) {
+  info.mBorderWidth = sz.width;
+  info.mBorderHeight = sz.height;
+  LOG_INFO("SET BORDER: " << info.mBorderWidth << "x" << info.mBorderHeight);
+  return this;
+}
 
 GDDistanceMap *GDDistanceMap::setCaveSize(godot::Vector2i sz) {
   info.mCaveWidth = sz.width;
@@ -63,21 +69,26 @@ GDDistanceMap *GDDistanceMap::setFloor(godot::Vector2i floor) {
 }
 
 void GDDistanceMap::make_it(TileMapLayer *pTileMap, int layer) {
-  LOG_INFO("====================================================="
+  LOG_INFO("=====================================================" << std::endl
            << "##Make DistanceMap tileMap : " << info.mCaveWidth << "x"
+           << info.mCaveHeight << " cell:" << info.mCaveWidth<< "," << info.mCellHeight
            << info.mCaveHeight << " border:" << info.mBorderWidth << ","
            << info.mBorderHeight);
 
   LOG_DEBUG("  Copy tileMap");
-  std::vector<std::vector<int>> grid;
-  for (int y = 0; y < info.mCaveHeight + info.mBorderHeight * 2; ++y) {
-    std::vector<int> row;
-    for (int x = 0; x < info.mCaveWidth + info.mBorderWidth * 2; ++x) {
+  const int COPY_W = info.mCaveWidth + 2;
+  const int COPY_H = info.mCaveHeight + 2;
+  // Initialize Grid wwill solid wall so [][] works and have 1x1 border
+  std::vector<std::vector<int>> grid(COPY_H, std::vector<int>(COPY_W, 1));
+  for (int y = 0; y < info.mCaveHeight; ++y) {
+    for (int x = 0; x < info.mCaveWidth; ++x) {
       Vector2i coords = getMapPos(x, y);
       int v = (pTileMap->get_cell_atlas_coords(coords) == mFloor) ? 0 : 1;
-      row.push_back(v);
+      LOG_DEBUG_CONT((v ? "#" : " "));
+      // This never writes the 1x1 border edge which has been init'ed to 1
+      grid[y+1][x+1] = v;
     }
-    grid.push_back(row);
+    LOG_DEBUG("");
   }
 
   core.initialize(grid, info);

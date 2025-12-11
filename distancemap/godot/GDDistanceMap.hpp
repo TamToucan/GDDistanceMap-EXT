@@ -29,6 +29,7 @@ public:
   GDDistanceMap();
   ~GDDistanceMap();
 
+  GDDistanceMap *setBorderSize(godot::Vector2i sz);
   GDDistanceMap *setCaveSize(godot::Vector2i sz);
   GDDistanceMap *setCellSize(godot::Vector2i sz);
   GDDistanceMap *setFloor(godot::Vector2i floor);
