@@ -1,5 +1,3 @@
-#include <cmath>
-#include <iostream>
 #include <vector>
 
 #include "GDDistanceMap.hpp"
@@ -120,7 +118,6 @@ float GDDistanceMap::getMove(godot::Node *id, godot::Vector2 from,
     LOG_DEBUG("===TRACK => CREATE CONTEXT");
     ctx = new DistanceMap::Router::RouteCtx();
     pTracker->setContext<DistanceMap::Router::RouteCtx>(id, ctx);
-    LOG_DEBUG("===ADD UNTRACK CALLBACK");
     pTracker->set_untrack_callback(untrack_cb);
   }
 
