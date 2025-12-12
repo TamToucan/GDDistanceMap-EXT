@@ -5,7 +5,10 @@
 #include "FlowField.hpp"
 #include "GridToGraph.hpp"
 #include "GridTypes.hpp"
+/*/
 #include "NavigationGraph.hpp"
+*/
+#include "DistanceMapCore.hpp"
 #include "Router.hpp"
 
 using namespace DistanceMap;
@@ -36,15 +39,24 @@ std::pair<float, float> computeDirection(float angleDeg) {
 
 int main(int argc, char **argv) {
   auto grid = GridToGraph::readGridFromFile("GRID.txt");
-  auto graph = GridToGraph::makeGraph(grid);
+
+  /*
+  auto floorGrid = GridToGraph::gridToFloorGrid(grid);
+  auto graph = GridToGraph::makeGraph(floorGrid);
+  */
   auto pathGrid(grid);
   DistanceMap::Router::Info info;
   info.mCaveHeight = 32;
   info.mCellWidth = 8;
   info.mCellHeight = 8;
 
+  DistanceMap::DistanceMapCore core;
+  core.initialize(grid, info);
+
+  /*
   Routing::NavigationGraph navGraph;
   navGraph.initialize(graph, info);
+  */
 
   DistanceMap::GridType::Vec2 from(300, 250);
   DistanceMap::GridType::Vec2 to(1950, 1086);
@@ -62,16 +74,19 @@ int main(int argc, char **argv) {
         (int)(from.y / (info.mCellHeight * 8))};
     reached_target =
         (fromPnt.first == toPnt.first && fromPnt.second == toPnt.second);
-    /*
+#if 0
+    // It does loop back ro dont check this
     if (prevPnt != fromPnt) {
-            if (pathGrid[fromPnt.second][fromPnt.first] == 'x') {
-                    std::cerr << "ERROR: LOOPED BACK TO " << fromPnt.first
-    <<","<< fromPnt.second << std::endl; break;
-            }
+      if (pathGrid[fromPnt.second][fromPnt.first] == 'x') {
+        std::cerr << "ERROR: LOOPED BACK TO " << fromPnt.first << ","
+                  << fromPnt.second << std::endl;
+        break;
+      }
     }
-    */
+#endif
     prevPnt = fromPnt;
-    if (pathGrid[fromPnt.second][fromPnt.first] == 0) {
+    auto v = pathGrid[fromPnt.second][fromPnt.first];
+    if (v && v != 'x') {
       std::cerr << "ERROR: WALL " << fromPnt.first << "," << fromPnt.second
                 << std::endl;
       break;
@@ -80,7 +95,10 @@ int main(int argc, char **argv) {
     std::cerr << "MOVEFROM: " << fromPnt.first << "," << fromPnt.second
               << std::endl;
 
-    float ang = navGraph.getMoveDirection(ctx, from, to, 0);
+    /*
+float ang = navGraph.getMoveDirection(ctx, from, to, 0);
+*/
+    float ang = core.getMove(ctx, from, to, 0);
     std::pair<float, float> mv = computeDirection(ang);
     from.x += mv.first * 13;
     from.y += mv.second * 13;
@@ -99,11 +117,11 @@ int main(int argc, char **argv) {
       if (col == toPnt.first && row == toPnt.second) {
         std::cerr << "T";
       } else if (v == 0) {
-        std::cerr << "#";
+        std::cerr << " ";
       } else if (v == 'x') {
         std::cerr << "x";
       } else {
-        std::cerr << " ";
+        std::cerr << "#";
       }
     }
     std::cerr << std::endl;
@@ -116,31 +134,4 @@ int main(int argc, char **argv) {
   }
 
   return reached_target ? 0 : 1;
-
-#if 0
-	auto grid = GridToGraph::readGridFromFile("D:/tmp/GRID.txt");
-	subgrid.width = 13;
-	subgrid.height = 11;
-	subgrid.offsetX = 2;
-	subgrid.offsetY = 1;
-	auto W = GridType::WALL;
-	subgrid.grid = {
-		W, W, W, W, W, W, W, W, 0, 0, 0, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, W, W, 0, 0, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, W, W, 0, 0, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-		W, 0, 0, W, W, W, W, 0, 0, 0, 0, 0, 0,
-		W, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, W, 0,
-		W, W, 0, 0, 0, 0, 0, 0, 0, 0, 0, W, W,
-		W, W, 0, 0, 0, 0, 0, 0, 0, 0, W, W, W,
-		W, W, W, 0, 0, 0, 0, 0, 0, W, W, W, W,
-		W, W, W, W, W, W, W, W, 0, W, W, W, W,
-	};
-	std::vector< std::pair<int,int>> sinks = { { 7,9 }, { 8,10 }, { 6,9 }, { 5,9 }, { 4,9 }, { 8,9 }, { 3,9 } };
-
-	const auto costDirFlow = FlowField::generateFlowFieldDial(subgrid, sinks);
-	subgrid.costFlowFields.push_back({ 0, costDirFlow });
-	debugFlow(subgrid);
-#endif
 }

@@ -2,13 +2,21 @@
 #include "Debug.h"
 #include "GridToGraph.hpp"
 
-
 namespace DistanceMap {
 
 void DistanceMapCore::initialize(const std::vector<std::vector<int>> &grid,
                                  const Router::Info &info) {
   SET_DEBUG("ALL");
   this->info = info;
+
+  LOG_DEBUG("## CREATE DistaceMapCore");
+  for (const auto &row : grid) {
+    for (int xy : row) {
+      LOG_DEBUG_CONT((xy ? '#' : ' '));
+    }
+    LOG_DEBUG("");
+  }
+  LOG_DEBUG("");
 
   // Make a grid of distance to closest wall (0 = wall)
   LOG_INFO("## makeWallDistanceGrid");
@@ -20,15 +28,8 @@ void DistanceMapCore::initialize(const std::vector<std::vector<int>> &grid,
 
   // Create a floor grid where
   //   WALLS = EMPTY
-  //   FLOOR (i.e. non-zero distance to wall) = PATH
-  GridType::Grid floorGrid;
-  for (const std::vector<int> &row : wallDistGrid) {
-    std::vector<int> floorRow;
-    for (int xy : row) {
-      floorRow.push_back(xy ? GridToGraph::PATH : GridToGraph::EMPTY);
-    }
-    floorGrid.push_back(floorRow);
-  }
+  //   FLOOR = PATH
+  GridType::Grid floorGrid = GridToGraph::gridToFloorGrid(grid);
 
   // Use that floorGrid to create the complete graph for movement
   LOG_INFO("## makeGraph");

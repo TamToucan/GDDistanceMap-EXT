@@ -356,8 +356,8 @@ inline bool isPath(int cellValue) {
 }
 
 #ifdef NO_DEBUG
-void writeGridToFile(const std::vector<std::vector<int>> &grid,
-                     const std::string &filename) {}
+void writeFloorGridToFile(const std::vector<std::vector<int>> &grid,
+                          const std::string &filename) {}
 void debugDump(const Graph &graph) {}
 void debugGridEdges(const Graph &graphs) {}
 void debugAbstractNodes(int pass, const AbstractLevel &ablv,
@@ -369,8 +369,8 @@ void debugZoneEdges(int pass, const AbstractLevel &ablv, const Graph &graph) {}
 void debugZoneBoundaries(int pass, const AbstractLevel &ablv) {}
 void debugExpandedPaths(const Grid &grid) {}
 #else
-void writeGridToFile(const std::vector<std::vector<int>> &grid,
-                     const std::string &filename);
+void writeFloorGridToFile(const std::vector<std::vector<int>> &grid,
+                          const std::string &filename);
 void debugDump(const Graph &graph);
 void debugGridEdges(const Graph &graphs);
 void debugAbstractNodes(int pass, const AbstractLevel &ablv,
@@ -1866,15 +1866,17 @@ std::vector<AbstractLevel> makeAbstractLevels(const Graph &graph) {
 }
 
 Graph makeGraph(const Grid &floorGrid) {
+  SET_DEBUG("ALL");
   LOG_INFO("## MAKE GRAPH");
   {
-    writeGridToFile(floorGrid, "GRID.txt");
+    writeFloorGridToFile(floorGrid, "GRID.txt");
   }
   //
   // Need to copy the floorGrid since ZSThinning removes floor
   //
   Graph graph;
   graph.infoGrid = floorGrid;
+  // ## DEBUG
   {
     auto tempGrid = graph.infoGrid;
 
@@ -2493,8 +2495,8 @@ void debugDump(const Graph &graph) {
 #endif
 
 #ifndef NO_DEBUG
-void writeGridToFile(const std::vector<std::vector<int>> &grid,
-                     const std::string &filename) {
+void writeFloorGridToFile(const std::vector<std::vector<int>> &grid,
+                          const std::string &filename) {
   std::ofstream outFile(filename);
   if (!outFile) {
     throw std::runtime_error("Could not open file for writing");
@@ -2502,12 +2504,25 @@ void writeGridToFile(const std::vector<std::vector<int>> &grid,
 
   for (const auto &row : grid) {
     for (int cell : row) {
-      outFile << (cell ? ' ' : '#');
+      outFile << (cell == GridToGraph::EMPTY ? '#' : ' ');
     }
     outFile << std::endl;
   }
 }
 #endif
+
+std::vector<std::vector<int>>
+gridToFloorGrid(const std::vector<std::vector<int>> &grid) {
+  std::vector<std::vector<int>> floorGrid;
+  for (const auto &row : grid) {
+    std::vector<int> floorRow;
+    for (int cell : row) {
+      floorRow.push_back(cell ? GridToGraph::EMPTY : GridToGraph::PATH);
+    }
+    floorGrid.push_back(floorRow);
+  }
+  return floorGrid;
+}
 
 std::vector<std::vector<int>> readGridFromFile(const std::string &filename) {
   std::ifstream inFile(filename);
@@ -2522,9 +2537,9 @@ std::vector<std::vector<int>> readGridFromFile(const std::string &filename) {
     std::vector<int> row;
     for (char c : line) {
       if (c == '#') {
-        row.push_back(EMPTY);
+        row.push_back(1);
       } else if (c == ' ') {
-        row.push_back(PATH);
+        row.push_back(0);
       }
       // Note: other characters are ignored
     }

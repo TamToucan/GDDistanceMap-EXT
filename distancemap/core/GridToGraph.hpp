@@ -1,15 +1,17 @@
 #ifndef DISTANCEMAP_SRC_GRIDTOGRAPH_HPP_
 #define DISTANCEMAP_SRC_GRIDTOGRAPH_HPP_
 
-#include <vector>
+#include <string>
 #include <unordered_map>
 #include <utility>
-#include <string>
+#include <vector>
 
-#include "GridTypes.hpp"
+
 #include "FlowField.hpp"
-#include "Routing.hpp"
 #include "GDDistanceMapApi.h"
+#include "GridTypes.hpp"
+#include "Routing.hpp"
+
 
 //
 // Take the 2D grid of EMPTY/PATH (i.e. 1 = floor, 0 = wall) and
@@ -43,7 +45,7 @@
 // the zone and the list of AbstractNode indexes of the adjacent zones.
 // - Each zone also has the lis of cells the form the boundary with a
 //   neighboring zone that it's actually connected to.
-// The AbstractLevel also has 
+// The AbstractLevel also has
 //
 // ######################      4 Zones made for the 4 abstract nodes
 // #            -       #      Zone0 adjacent to Zone1
@@ -52,7 +54,7 @@
 // #-------#-----       #      Zone3 adjacent to Zone2
 // #       #            #      The '-' are boundary cells
 // #       ########-----#
-// #   0   #            # 
+// #   0   #            #
 // #       #    3       #
 // #       #            #
 // ######################
@@ -71,7 +73,10 @@
 namespace DistanceMap {
 namespace GridToGraph {
 
-GDDISTANCE_MAP_API std::vector<std::vector<int>> readGridFromFile(const std::string& filename);
+GDDISTANCE_MAP_API std::vector<std::vector<int>>
+gridToFloorGrid(const std::vector<std::vector<int>> &grid);
+GDDISTANCE_MAP_API std::vector<std::vector<int>>
+readGridFromFile(const std::string &filename);
 
 using namespace GridType;
 
@@ -79,20 +84,19 @@ using namespace GridType;
 const int EMPTY = 0x00;
 const int PATH = 0x01; // NOTE: Must be 1 for dead end detection
 
-    // An AbstractLevel takes the base nodes and groups them into
-    // clusters of size based on the level number. This creates
-	// it's own craft of abstract nodes and edges and a grid of
-	// ZonePointInfo.
-	// Each abstract node is then turned into a ZoneInfo with
-	// info on the base nodes/edges in that zone and the adjacent zones.
-    //
-struct AbstractLevel
-{
-    std::vector<AbstractEdge> abstractEdges;
-    std::vector<AbstractNode> abstractNodes;
-    GridType::ZoneGrid zoneGrid;
-	std::vector<FlowField::SubGrid> subGrids;
-	std::vector<GridType::ZoneInfo> zones;
+// An AbstractLevel takes the base nodes and groups them into
+// clusters of size based on the level number. This creates
+// it's own craft of abstract nodes and edges and a grid of
+// ZonePointInfo.
+// Each abstract node is then turned into a ZoneInfo with
+// info on the base nodes/edges in that zone and the adjacent zones.
+//
+struct AbstractLevel {
+  std::vector<AbstractEdge> abstractEdges;
+  std::vector<AbstractNode> abstractNodes;
+  GridType::ZoneGrid zoneGrid;
+  std::vector<FlowField::SubGrid> subGrids;
+  std::vector<GridType::ZoneInfo> zones;
 };
 
 // Map of ALL BaseFromIdx,BaseToIdx pairs returning the total length of path
@@ -101,31 +105,30 @@ struct AbstractLevel
 using PathCostMap = std::unordered_map<std::pair<int, int>, int, PairHash>;
 
 struct FallbackCell {
-    int nextFlowX = 0;
-    int nextFlowY = 0; // Closest flow field point
-    int distance = -1;
+  int nextFlowX = 0;
+  int nextFlowY = 0; // Closest flow field point
+  int distance = -1;
 };
 using FallbackGrid = std::vector<std::vector<FallbackCell>>;
 
-
 struct Graph {
-    GridType::Grid infoGrid;
-    BaseGraph baseGraph;
-    PathCostMap pathCostMap;
-    Routing::SparseNavGraph routingGraph;
-    std::vector<Edge> baseEdges;
-    std::vector<GridType::Point> baseNodes;
-    std::vector<GridType::Point> deadEnds;
-    std::vector<AbstractLevel> abstractLevels;
+  GridType::Grid infoGrid;
+  BaseGraph baseGraph;
+  PathCostMap pathCostMap;
+  Routing::SparseNavGraph routingGraph;
+  std::vector<Edge> baseEdges;
+  std::vector<GridType::Point> baseNodes;
+  std::vector<GridType::Point> deadEnds;
+  std::vector<AbstractLevel> abstractLevels;
 };
 
 ////////////////////////////////////////////////////////////////////////////////
 //
 // Floor must = PATH on input i.e. walkable, WALLS = EMPTY
 //
-GDDISTANCE_MAP_API Graph makeGraph(const GridType::Grid& floorGrid);
+GDDISTANCE_MAP_API Graph makeGraph(const GridType::Grid &floorGrid);
 
-}
-}
+} // namespace GridToGraph
+} // namespace DistanceMap
 
 #endif /* DISTANCEMAP_SRC_GRIDTOGRAPH_HPP_ */
