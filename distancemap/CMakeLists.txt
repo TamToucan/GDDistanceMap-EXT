@@ -21,6 +21,7 @@ target_link_libraries(${CORE_LIB_NAME}
     PUBLIC Stuff
     PUBLIC Algo)
 
+if(BUILD_GODOT_DISTANCEMAP)
 # Godot wrapper library
 set(GD_LIB_NAME GDDistanceMap)
 file(GLOB_RECURSE GD_SOURCES CONFIGURE_DEPENDS
@@ -42,6 +43,7 @@ target_link_libraries(${GD_LIB_NAME}
     PRIVATE TrackerLib::Tracker
     PRIVATE TrackerLib::GDTracker
     PUBLIC godot::cpp)
+endif()
 
 ##############################
 
@@ -70,32 +72,45 @@ target_link_libraries(testMain
     PRIVATE Stuff
     PRIVATE Algo
     PRIVATE TrackerLib::Tracker
-    PRIVATE TrackerLib::GDTracker
-    PRIVATE ${GD_LIB_NAME}
-    PRIVATE ${CORE_LIB_NAME}
-    PUBLIC godot::cpp)
+    PRIVATE ${CORE_LIB_NAME})
+
+if(BUILD_GODOT_DISTANCEMAP)
+    target_link_libraries(testMain
+        PRIVATE TrackerLib::GDTracker
+        PRIVATE ${GD_LIB_NAME}
+        PUBLIC godot::cpp)
+endif()
 
 target_include_directories(testMain PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/core")
 
 # Define the DLL paths manually
 IF (ALL_SUBS_BUILD_ON)
-    set(GDDISTANCEMAP_DLL "${CMAKE_BINARY_DIR}/DistanceMap-Lib/distancemap/${GD_LIB_NAME}${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    if(BUILD_GODOT_DISTANCEMAP)
+        set(GDDISTANCEMAP_DLL "${CMAKE_BINARY_DIR}/DistanceMap-Lib/distancemap/GDDistanceMap${CMAKE_SHARED_LIBRARY_SUFFIX}")
+        set(GDTRACKER_DLL "${CMAKE_BINARY_DIR}/Tracker-Lib/tracker/GDTracker${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    endif()
     set(DISTANCEMAP_DLL "${CMAKE_BINARY_DIR}/DistanceMap-Lib/distancemap/${CORE_LIB_NAME}${CMAKE_SHARED_LIBRARY_SUFFIX}")
-    set(GDTRACKER_DLL "${CMAKE_BINARY_DIR}/Tracker-Lib/tracker/GDTracker${CMAKE_SHARED_LIBRARY_SUFFIX}")
 ELSE()
-    set(GDDISTANCEMAP_DLL "${CMAKE_BINARY_DIR}/distancemap/${GD_LIB_NAME}${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    if(BUILD_GODOT_DISTANCEMAP)
+        set(GDDISTANCEMAP_DLL "${CMAKE_BINARY_DIR}/distancemap/GDDistanceMap${CMAKE_SHARED_LIBRARY_SUFFIX}")
+        set(GDTRACKER_DLL "${CMAKE_BINARY_DIR}/_deps/tracker-build/tracker/GDTracker${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    endif()
     set(DISTANCEMAP_DLL "${CMAKE_BINARY_DIR}/distancemap/${CORE_LIB_NAME}${CMAKE_SHARED_LIBRARY_SUFFIX}")
-    set(GDTRACKER_DLL "${CMAKE_BINARY_DIR}/_deps/tracker-build/tracker/GDTracker${CMAKE_SHARED_LIBRARY_SUFFIX}")
 ENDIF()
 
 add_custom_command(TARGET testMain POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${GDDISTANCEMAP_DLL}" "$<TARGET_FILE_DIR:testMain>"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${DISTANCEMAP_DLL}" "$<TARGET_FILE_DIR:testMain>"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-	"${GDTRACKER_DLL}" "$<TARGET_FILE_DIR:testMain>"
 )
+
+if(BUILD_GODOT_DISTANCEMAP)
+    add_custom_command(TARGET testMain POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${GDDISTANCEMAP_DLL}" "$<TARGET_FILE_DIR:testMain>"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${GDTRACKER_DLL}" "$<TARGET_FILE_DIR:testMain>"
+    )
+endif()
 
 ##############################
 # Test for DistanceMapNavigator
@@ -111,38 +126,49 @@ target_link_libraries(testDistanceMap
     PRIVATE Stuff
     PRIVATE Algo
     PRIVATE TrackerLib::Tracker
-    PRIVATE TrackerLib::GDTracker
-    PRIVATE ${GD_LIB_NAME}
-    PRIVATE ${CORE_LIB_NAME}
-    PUBLIC godot::cpp)
+    PRIVATE ${CORE_LIB_NAME})
+
+if(BUILD_GODOT_DISTANCEMAP)
+    target_link_libraries(testDistanceMap
+        PRIVATE TrackerLib::GDTracker
+        PRIVATE ${GD_LIB_NAME}
+        PUBLIC godot::cpp)
+endif()
 
 target_include_directories(testDistanceMap PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/core")
 
 add_custom_command(TARGET testDistanceMap POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${GDDISTANCEMAP_DLL}" "$<TARGET_FILE_DIR:testDistanceMap>"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
         "${DISTANCEMAP_DLL}" "$<TARGET_FILE_DIR:testDistanceMap>"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-	"${GDTRACKER_DLL}" "$<TARGET_FILE_DIR:testDistanceMap>"
 )
+
+if(BUILD_GODOT_DISTANCEMAP)
+    add_custom_command(TARGET testDistanceMap POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${GDDISTANCEMAP_DLL}" "$<TARGET_FILE_DIR:testDistanceMap>"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${GDTRACKER_DLL}" "$<TARGET_FILE_DIR:testDistanceMap>"
+    )
+endif()
 
 ##############################
 
 target_compile_definitions(${CORE_LIB_NAME} PRIVATE GDDISTANCEMAP_EXPORTS)
-target_compile_definitions(${GD_LIB_NAME} PRIVATE GDDISTANCEMAP_EXPORTS)
-
-set(LOTT_ADDON_DIR "D:/git/the-lott/addons/gddistanceMap/bin")
-
-add_dependencies(${GD_LIB_NAME} GDTracker)
-
-add_custom_command(
-    TARGET ${GD_LIB_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory "${LOTT_ADDON_DIR}"
-    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${CORE_LIB_NAME}>" "${LOTT_ADDON_DIR}"
-    COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${GD_LIB_NAME}>" "${LOTT_ADDON_DIR}"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:TrackerLib::Tracker>" "${LOTT_ADDON_DIR}"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:TrackerLib::GDTracker>" "${LOTT_ADDON_DIR}"
-    COMMENT "Copying GDDistanceMap and GDTracker DLLs to addon dir"
-)
+if(BUILD_GODOT_DISTANCEMAP)
+    target_compile_definitions(${GD_LIB_NAME} PRIVATE GDDISTANCEMAP_EXPORTS)
+    
+    set(LOTT_ADDON_DIR "D:/git/the-lott/addons/gddistanceMap/bin")
+    
+    add_dependencies(${GD_LIB_NAME} GDTracker)
+    
+    add_custom_command(
+        TARGET ${GD_LIB_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${LOTT_ADDON_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${CORE_LIB_NAME}>" "${LOTT_ADDON_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:${GD_LIB_NAME}>" "${LOTT_ADDON_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:TrackerLib::Tracker>" "${LOTT_ADDON_DIR}"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:TrackerLib::GDTracker>" "${LOTT_ADDON_DIR}"
+        COMMENT "Copying GDDistanceMap and GDTracker DLLs to addon dir"
+    )
+endif()
 
