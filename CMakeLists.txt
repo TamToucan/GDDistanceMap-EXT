@@ -54,14 +54,16 @@ if(NOT ALL_SUBS_BUILD_ON)
         set(CUTE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/deps/cute")
         if(EXISTS "${CUTE_ROOT}/lib/libcute.a")
             set(CUTE_FOUND ON)
-            add_library(cute STATIC IMPORTED GLOBAL)
-            set_target_properties(cute PROPERTIES
-                IMPORTED_LOCATION "${CUTE_ROOT}/lib/libcute.a"
-                INTERFACE_INCLUDE_DIRECTORIES "${CUTE_ROOT}/include;${CUTE_ROOT}"
-            )
-            file(GLOB CUTE_DEPENDENCIES "${CUTE_ROOT}/lib/*.a")
-            list(REMOVE_ITEM CUTE_DEPENDENCIES "${CUTE_ROOT}/lib/libcute.a")
-            set_target_properties(cute PROPERTIES INTERFACE_LINK_LIBRARIES "${CUTE_DEPENDENCIES}")
+            if(NOT TARGET cute_lib)
+                add_library(cute STATIC IMPORTED GLOBAL)
+                set_target_properties(cute PROPERTIES
+                    IMPORTED_LOCATION "${CUTE_ROOT}/lib/libcute.a"
+                    INTERFACE_INCLUDE_DIRECTORIES "${CUTE_ROOT}/include;${CUTE_ROOT}"
+                )
+                file(GLOB CUTE_DEPENDENCIES "${CUTE_ROOT}/lib/*.a")
+                list(REMOVE_ITEM CUTE_DEPENDENCIES "${CUTE_ROOT}/lib/libcute.a")
+                set_target_properties(cute PROPERTIES INTERFACE_LINK_LIBRARIES "${CUTE_DEPENDENCIES}")
+            endif()
         endif()
     endif()
 
@@ -84,21 +86,7 @@ endif()
 
 # --- 4. Build Cute Adapter ---
 if(BUILD_CUTE AND CUTE_FOUND)
-    # Ensure source file exists at 'distancemap/src/cute/cuteDistanceMap.cpp'
-    add_library(CuteDistanceMap SHARED distancemap/src/cute/cuteDistanceMap.cpp)
-    
-    # Link Core and Cute
-    target_link_libraries(CuteDistanceMap PRIVATE DistanceMapLib::DistanceMap cute)
-    target_include_directories(CuteDistanceMap PRIVATE distancemap/src/cute)
-    
-    # Windows: Copy DLL next to CuteDistanceMap so tests can run
-    if(TARGET DistanceMapLib::DistanceMap)
-         add_custom_command(TARGET CuteDistanceMap POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            $<TARGET_FILE:DistanceMapLib::DistanceMap>
-            $<TARGET_FILE_DIR:CuteDistanceMap>
-        )
-    endif()
+    add_subdirectory(distancemap/src/cute)
 endif()
 
 

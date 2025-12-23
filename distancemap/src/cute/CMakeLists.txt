@@ -9,13 +9,13 @@ target_include_directories(CuteDistanceMap PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}"
 target_include_directories(CuteDistanceMap PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../core")
 
 target_link_libraries(CuteDistanceMap
-	PRIVATE distanceMap
+	PRIVATE DistanceMap
     PRIVATE Random
     PRIVATE MathStuff
-    PRIVATE DistanceMap GDTracker cute
+    PRIVATE GDTracker cute_lib
 )
 
-set_target_properties(CuteDistanceMap PROPERTIES OUTPUT_NAME CuteMaze)
+set_target_properties(CuteDistanceMap PROPERTIES OUTPUT_NAME CuteDistanceMap)
 set_target_properties(CuteDistanceMap PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
 if(NOT MSVC)
 	set_target_properties(CuteDistanceMap PROPERTIES PREFIX "")
