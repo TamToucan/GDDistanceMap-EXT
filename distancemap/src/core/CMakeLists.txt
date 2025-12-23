@@ -1,5 +1,5 @@
 # Target Name
-set(DMAP_LIB_NAME distancemap)
+set(DMAP_LIB_NAME DistanceMap)
 
 # Source Files
 file(GLOB_RECURSE DMAP_SOURCES CONFIGURE_DEPENDS
@@ -9,14 +9,17 @@ file(GLOB_RECURSE DMAP_SOURCES CONFIGURE_DEPENDS
 # Define Shared Library
 add_library(${DMAP_LIB_NAME} SHARED ${DMAP_SOURCES})
 
+target_compile_definitions(${DMAP_LIB_NAME} PRIVATE GDDISTANCEMAP_EXPORTS)
+
 # Include Directories
 target_include_directories(${DMAP_LIB_NAME} PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}"    # . (src/core)
     "${CMAKE_CURRENT_SOURCE_DIR}/.." # .. (src)
-    # Common Deps
+    # Deps from Lott-Libs/Libs
     "${CMAKE_BINARY_DIR}/_deps/libs-src/lib/MathStuff"
     "${CMAKE_BINARY_DIR}/_deps/libs-src/lib/Algo"
     "${CMAKE_BINARY_DIR}/_deps/libs-src/lib/Util"
+    "${CMAKE_BINARY_DIR}/_deps/libs-src/lib/Stuff"  # <--- ADDED THIS LINE
 )
 
 # Properties
@@ -26,8 +29,7 @@ if(NOT MSVC)
 endif()
 
 # Linking
-# We link Tracker here because DistanceMap depends on it
 target_link_libraries(${DMAP_LIB_NAME}
-    PRIVATE Algo MathStuff
-    PUBLIC Tracker # Assuming Tracker is needed by headers publically
+    PRIVATE Algo MathStuff Stuff
+    PUBLIC Tracker
 )

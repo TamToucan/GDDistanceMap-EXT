@@ -1,35 +1,31 @@
-set(GDDMAP_LIB_NAME GDDistanceMap)
+# --- 1. Test Executable (Functional Tests) ---
+add_executable(distancemap_test testMain.cpp)
 
-file(GLOB_RECURSE GDDMAP_SOURCES CONFIGURE_DEPENDS
-    "*.h" "*.hpp" "*.cpp"
-)
+target_include_directories(distancemap_test PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../src")
+target_link_libraries(distancemap_test PRIVATE DistanceMapLib::DistanceMap)
 
-add_library(${GDDMAP_LIB_NAME} SHARED ${GDDMAP_SOURCES})
-
-target_include_directories(${GDDMAP_LIB_NAME} PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/../core"
-    "${CMAKE_CURRENT_SOURCE_DIR}"
-    "${CMAKE_BINARY_DIR}/_deps/libs-src/lib/Util"
-)
-
-if(NOT MSVC)
-    set_target_properties(${GDDMAP_LIB_NAME} PROPERTIES PREFIX "")
+# Windows: Copy DLL
+if(TARGET DistanceMapLib::DistanceMap)
+    add_custom_command(TARGET distancemap_test POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:DistanceMapLib::DistanceMap>
+        $<TARGET_FILE_DIR:distancemap_test>
+    )
 endif()
 
-# Link to the sibling 'distancemap' target
-target_link_libraries(${GDDMAP_LIB_NAME}
-    PRIVATE distancemap
-    PUBLIC godot::cpp
-)
 
-# Copy DLLs to Godot Project
-# Adjust path "addons/gddistancemap/bin" as needed for your actual folder structure
-add_custom_command(
-    TARGET ${GDDMAP_LIB_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        $<TARGET_FILE:distancemap>
-        "D:/git/the-lott/addons/gddistancemap/bin"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        $<TARGET_FILE:${GDDMAP_LIB_NAME}>
-        "D:/git/the-lott/addons/gddistancemap/bin"
-)
+# --- 2. Time Executable (Benchmarks) ---
+add_executable(distancemap_time timeMain.cpp)
+
+target_include_directories(distancemap_time PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../src")
+target_link_libraries(distancemap_time PRIVATE DistanceMapLib::DistanceMap)
+
+# Windows: Copy DLL (Same logic for the second exe)
+if(TARGET DistanceMapLib::DistanceMap)
+    add_custom_command(TARGET distancemap_time POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:DistanceMapLib::DistanceMap>
+        $<TARGET_FILE_DIR:distancemap_time>
+    )
+endif()
+

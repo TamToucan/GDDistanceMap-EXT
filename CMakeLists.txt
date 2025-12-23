@@ -73,7 +73,7 @@ endif()
 # --- 2. Build Core Library ---
 # Point to the new split location
 add_subdirectory(distancemap/src/core)
-add_library(DistanceMapLib::DistanceMap ALIAS distancemap)
+add_library(DistanceMapLib::DistanceMap ALIAS DistanceMap)
 
 
 # --- 3. Build Godot Adapter ---
