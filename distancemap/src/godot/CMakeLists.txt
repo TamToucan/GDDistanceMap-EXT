@@ -11,7 +11,6 @@ target_include_directories(${GDDMAP_LIB_NAME} PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/../core"
     "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_BINARY_DIR}/_deps/libs-src/lib/Util"
-    "${CMAKE_BINARY_DIR}/_deps/tracker-src/tracker/src/godot" # <--- Fix for GDTracker.hpp
 )
 
 if(NOT MSVC)
@@ -25,11 +24,19 @@ target_link_libraries(${GDDMAP_LIB_NAME}
 )
 
 # Copy DLLs
+set(GD_DMAP_ADDON_PATH, "D:/git/the-lott/addons/gddistancemap/bin")
+
 add_custom_command(
     TARGET ${GDDMAP_LIB_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         $<TARGET_FILE:DistanceMap>
-        "D:/git/the-lott/addons/gddistancemap/bin"
+	${GD_DMAP_ADDON_PATH}
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:Tracker>
+	${GD_DMAP_ADDON_PATH}
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        $<TARGET_FILE:GDTracker>
+	${GD_DMAP_ADDON_PATH}
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
         $<TARGET_FILE:${GDDMAP_LIB_NAME}>
         "D:/git/the-lott/addons/gddistancemap/bin"
