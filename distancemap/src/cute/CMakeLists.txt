@@ -12,7 +12,8 @@ target_link_libraries(CuteDistanceMap
 	PRIVATE DistanceMap
     PRIVATE Random
     PRIVATE MathStuff
-    PRIVATE Tracker cute
+    PRIVATE Tracker
+    PRIVATE cute_lib
 )
 
 set_target_properties(CuteDistanceMap PROPERTIES OUTPUT_NAME CuteDistanceMap)
