@@ -12,7 +12,7 @@ target_link_libraries(CuteDistanceMap
 	PRIVATE DistanceMap
     PRIVATE Random
     PRIVATE MathStuff
-    PRIVATE GDTracker cute_lib
+    PRIVATE Tracker cute
 )
 
 set_target_properties(CuteDistanceMap PROPERTIES OUTPUT_NAME CuteDistanceMap)
